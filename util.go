@@ -11,19 +11,17 @@ func fieldNameToFlagName(fieldName string) string {
 	for i, r := range fieldName {
 		if i == 0 {
 			result = append(result, unicode.ToLower(r))
-		} else if unicode.IsLower(r) {
-			if i >= 2 && unicode.IsUpper(rune(fieldName[i-1])) && unicode.IsUpper(rune(fieldName[i-2])) {
-				last := result[len(result)-1]
-				result = append(result[0:len(result)-1], '-', last)
-			}
-			result = append(result, r)
 		} else if unicode.IsUpper(r) {
 			if unicode.IsLower(rune(fieldName[i-1])) {
 				result = append(result, '-')
 			}
 			result = append(result, unicode.ToLower(r))
 		} else {
-			panic(fmt.Sprintf("rune '%v' is neither uppercase nor lowercase", r))
+			if i >= 2 && unicode.IsUpper(rune(fieldName[i-1])) && unicode.IsUpper(rune(fieldName[i-2])) {
+				last := result[len(result)-1]
+				result = append(result[0:len(result)-1], '-', last)
+			}
+			result = append(result, r)
 		}
 	}
 	return string(result)
@@ -34,19 +32,17 @@ func fieldNameToEnvVarName(fieldName string) string {
 	for i, r := range fieldName {
 		if i == 0 {
 			result = append(result, unicode.ToUpper(r))
-		} else if unicode.IsLower(r) {
-			if i >= 2 && unicode.IsUpper(rune(fieldName[i-1])) && unicode.IsUpper(rune(fieldName[i-2])) {
-				last := result[len(result)-1]
-				result = append(result[0:len(result)-1], '_', last)
-			}
-			result = append(result, unicode.ToUpper(r))
 		} else if unicode.IsUpper(r) {
 			if unicode.IsLower(rune(fieldName[i-1])) {
 				result = append(result, '_')
 			}
 			result = append(result, unicode.ToUpper(r))
 		} else {
-			panic(fmt.Sprintf("rune '%v' is neither uppercase nor lowercase", r))
+			if i >= 2 && unicode.IsUpper(rune(fieldName[i-1])) && unicode.IsUpper(rune(fieldName[i-2])) {
+				last := result[len(result)-1]
+				result = append(result[0:len(result)-1], '_', last)
+			}
+			result = append(result, unicode.ToUpper(r))
 		}
 	}
 	return string(result)

@@ -85,7 +85,7 @@ func Test_inferCommandFlagsAndPositionals(t *testing.T) {
 		tc := tc
 		t.Run(name, func(t *testing.T) {
 			cmd, flags, pos := inferCommandFlagsAndPositionals(tc.root, tc.args)
-			With(t).Verify(cmd).Will(EqualTo(&tc.expectedCommand, cmpopts.IgnoreUnexported(Command{}))).OrFail()
+			With(t).Verify(cmd).Will(EqualTo(tc.expectedCommand, cmpopts.IgnoreUnexported(Command{}))).OrFail()
 			With(t).Verify(flags).Will(EqualTo(tc.expectedFlags)).OrFail()
 			With(t).Verify(pos).Will(EqualTo(tc.expectedPositionals)).OrFail()
 		})

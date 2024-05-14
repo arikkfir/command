@@ -2,7 +2,6 @@ package command
 
 import (
 	"bytes"
-	"regexp"
 	"testing"
 
 	. "github.com/arikkfir/justest"
@@ -113,12 +112,14 @@ Usage:
 
 Flags:
 	--b0        Bool field (default is false)
-	--help      Print usage information (default is false)
+	--help      Show help about how to use this command (default is false)
 	--s0        String field
 
 Available sub-commands:
 	sub1      Sub command 1
-	sub2      Sub command 2`,
+	sub2      Sub command 2
+
+`,
 		},
 		sub1Cmd.Name: {
 			cmd: sub1Cmd,
@@ -134,9 +135,11 @@ Usage:
 Flags:
 	--b0        Bool field (default is false)
 	--b1        Bool field (default is false)
-	--help      Print usage information (default is false)
+	--help      Show help about how to use this command (default is false)
 	--s0        String field
-	--s1        String field`,
+	--s1        String field
+
+`,
 		},
 		sub2Cmd.Name: {
 			cmd: sub2Cmd,
@@ -153,13 +156,15 @@ Flags:
 	--b0        Bool field (default is false)
 	--b1        Bool field (default is false)
 	--b2        Bool field (default is false)
-	--help      Print usage information (default is false)
+	--help      Show help about how to use this command (default is false)
 	--s0        String field
 	--s1        String field
 	--s2        String field
 
 Available sub-commands:
-	sub3      Sub command 3`,
+	sub3      Sub command 3
+
+`,
 		},
 		sub3Cmd.Name: {
 			cmd: sub3Cmd,
@@ -177,11 +182,13 @@ Flags:
 	--b1        Bool field (default is false)
 	--b2        Bool field (default is false)
 	--b3        Bool field (default is false)
-	--help      Print usage information (default is false)
+	--help      Show help about how to use this command (default is false)
 	--s0        String field
 	--s1        String field
 	--s2        String field
-	--s3        String field`,
+	--s3        String field
+
+`,
 		},
 	}
 	for name, tc := range testCases {
@@ -192,7 +199,7 @@ Flags:
 
 			With(t).Verify(tc.cmd.initializeFlagSet()).Will(Succeed()).OrFail()
 			tc.cmd.printCommandUsage(usageBuf, false)
-			With(t).Verify(usageBuf).Will(Say(`^` + regexp.QuoteMeta(tc.expectedUsage[1:]) + "\n\n+$")).OrFail()
+			With(t).Verify(usageBuf.String()).Will(EqualTo(tc.expectedUsage[1:])).OrFail()
 		})
 	}
 }
