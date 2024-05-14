@@ -432,7 +432,7 @@ func Execute(root *Command, args []string, envVars map[string]string) {
 	}
 
 	// Run the command with a fresh context
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(SetupSignalHandler())
 	defer cancel()
 	if err := cmd.Run(ctx, cmd.Config, cmd); err != nil {
 		cancel() // os.Exit might not invoke the deferred cancel call
