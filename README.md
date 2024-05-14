@@ -20,7 +20,7 @@ It has the following goals:
 
 ## Attribution
 
-This library is **heavily** inspired by [Gomega](https://github.com/spf13/cobra), an **excellent** command framework.
+This library is **heavily** inspired by [Cobra](https://github.com/spf13/cobra), an **excellent** command framework.
 I do feel, however, that it is a bit too heavy weight for just allowing users to write `main` CLI programs yet with the
 familiar (`kubectl`-like) command hierarchy and easy configuration. Cobra, unfortunately, carries much more water -
 for good and worse. It is packed with features and facilities which I believe most programs do not really need.
@@ -70,7 +70,7 @@ var rootCommand = command.New(command.Spec{
 running "kubectl" and pressing ENTER.`,
 	Config: &RootConfig{
 		SomeFlag1: "default value for this flag, unless given in CLI via --some-flag or via environment variables as SOME_FLAG",
-    },
+	},
 })
 ```
 
@@ -100,8 +100,8 @@ var cmd1Command = command.New(command.Spec{
 			SomeFlag: "override the default value",
 		},
 		AnotherFlag: "default for AnotherFlag", // set in CLI as "--another-flag" or environment variable ANOTHER_FLAG
-    },
-	Parent:           rootCommand,
+	},
+	Parent: rootCommand,
 	Run: func(ctx context.Context, anyConfig any, utils command.UsagePrinter) error {
 		config := anyConfig.(*Command1Config)
 		fmt.Printf("Running command1! Configuration is: %+v\n", config)
@@ -137,10 +137,10 @@ var cmd2Command = command.New(command.Spec{
 				SomeFlag: "override the default value",
 			},
 			AnotherFlag: "default value", 
-        },
+		},
 		YetAnotherFlag: "default for YetAnotherFlag",
 	},
-	Parent:           cmd1Command,
+	Parent: cmd1Command,
 	Run: func(ctx context.Context, anyConfig any, utils command.UsagePrinter) error {
 		config := anyConfig.(*Command2Config)
 		fmt.Printf("Running command2! Configuration is: %+v\n", config)
