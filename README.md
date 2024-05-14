@@ -176,7 +176,13 @@ $ myprogram --some-flag=someValue command1 # runs "command1" with the flag from 
 $ myprogram --some-flag=someValue command1 --another-flag=anotherValue # runs "command1" with the flag from root, and the value for "AnotherFlag"
 $ myprogram command1 --another-flag=anotherValue # runs "command1" with the default value for the root flag, and the value for "AnotherFlag"
 $ myprogram command1 command2 # runs the "command2" command
+```
 
+## Usage & Help screens
+
+For the root command (just running `myprogram`), this would be the usage page:
+
+```go
 $ myprogram --help
 myprogram: This is the root command.
 
@@ -190,6 +196,13 @@ Flags:
 	--some-flag    This flag is a demo flag of type string.
 	--help         Print usage information (default is false)
 
+Sub-commands:
+	command1       This is command1, a magnificent command that does something.
+```
+
+For `command1`, this would be the usage page:
+
+```go
 $ myprogram command1 --help
 myprogram command1: This is command1, a magnificent command that does something.
 
@@ -203,6 +216,13 @@ Flags:
 	--another-flag This is another flag, of type int.
 	--help         Print usage information (default is false)
 
+Sub-commands:
+    command2       This is command2, another magnificent command that does something.
+```
+
+For `command2`, notice that since it doesn't have a long description set, nor any sub-commands, none are printed: 
+
+```go
 $ myprogram command1 command2 --help
 myprogram command1 command2: This is command2, another magnificent command that does something.
 
