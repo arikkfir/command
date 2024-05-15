@@ -91,7 +91,7 @@ type Command1Config struct {
 	AnotherFlag int `config:"required" desc:"This is another flag, of type int."` // Notice how we made this flag required
 }
 
-var cmd1Command = command.New(command.Spec{
+var cmd1Command = command.New(rootCommand, command.Spec{
 	Name:             "command1",
 	ShortDescription: "This is command1, a magnificent command that does something.",
 	LongDescription:  `Longer description...`,
@@ -101,7 +101,6 @@ var cmd1Command = command.New(command.Spec{
 		},
 		AnotherFlag: "default for AnotherFlag", // set in CLI as "--another-flag" or environment variable ANOTHER_FLAG
 	},
-	Parent: rootCommand,
 	Run: func(ctx context.Context, anyConfig any, utils command.UsagePrinter) error {
 		config := anyConfig.(*Command1Config)
 		fmt.Printf("Running command1! Configuration is: %+v\n", config)
@@ -128,7 +127,7 @@ type Command2Config struct {
 	Positionals []string  `config:"args"` // This field will get all the non-flag positional arguments for the command
 }
 
-var cmd2Command = command.New(command.Spec{
+var cmd2Command = command.New(cmd1Command, command.Spec{
 	Name:             "command2",
 	ShortDescription: "This is command2, another magnificent command that does something.",
 	Config:           &Command1Config{
@@ -140,7 +139,6 @@ var cmd2Command = command.New(command.Spec{
 		},
 		YetAnotherFlag: "default for YetAnotherFlag",
 	},
-	Parent: cmd1Command,
 	Run: func(ctx context.Context, anyConfig any, utils command.UsagePrinter) error {
 		config := anyConfig.(*Command2Config)
 		fmt.Printf("Running command2! Configuration is: %+v\n", config)
