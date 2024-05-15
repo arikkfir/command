@@ -59,32 +59,29 @@ func Test_inferCommandFlagsAndPositionals(t *testing.T) {
 		expectedPositionals []string
 	}
 
-	rootCmd := New(Spec{
+	rootCmd := New(nil, Spec{
 		Name:             "root",
 		ShortDescription: "Root command",
 		LongDescription:  "This command is the\nroot command.",
 		Config:           &RootConfig{},
 	})
-	sub1Cmd := New(Spec{
+	sub1Cmd := New(rootCmd, Spec{
 		Name:             "sub1",
 		ShortDescription: "Sub command 1",
 		LongDescription:  "This command is the\nfirst sub command.",
 		Config:           &Sub1Config{},
-		Parent:           rootCmd,
 	})
-	sub2Cmd := New(Spec{
+	sub2Cmd := New(sub1Cmd, Spec{
 		Name:             "sub2",
 		ShortDescription: "Sub command 2",
 		LongDescription:  "This command is the\nsecond sub command.",
 		Config:           &Sub2Config{},
-		Parent:           sub1Cmd,
 	})
-	New(Spec{
+	New(sub2Cmd, Spec{
 		Name:             "sub3",
 		ShortDescription: "Sub command 3",
 		LongDescription:  "This command is the\nthird sub command.",
 		Config:           &Sub3Config{},
-		Parent:           sub2Cmd,
 	})
 
 	testCases := map[string]testCase{
