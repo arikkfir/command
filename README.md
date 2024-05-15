@@ -63,7 +63,7 @@ type RootConfig struct{
 	SomeFlag string `desc:"This flag is a demo flag of type string."` // We can provide flag descriptions
 }
 
-var rootCommand = command.New(command.Spec{
+var rootCommand = command.New(nil, command.Spec{
 	Name:             filepath.Base(os.Args[0]),
 	ShortDescription: "This is the root command.",
 	LongDescription: `This is the command executed when no sub-commands are specified in the command line, e.g. like
