@@ -24,9 +24,9 @@ var (
 	}
 )
 
-func New(spec Spec) *Command {
-	if spec.Parent != nil && !spec.Parent.createdByNewCommand {
-		panic("illegal parent was specified - was the parent created by 'command.NewCommand(...)'?")
+func New(parent *Command, spec Spec) *Command {
+	if parent != nil && !parent.createdByNewCommand {
+		panic("illegal parent was specified - was the parent created by 'command.New(...)'?")
 	}
 	cmd := &Command{
 		Name:                spec.Name,
@@ -34,7 +34,7 @@ func New(spec Spec) *Command {
 		LongDescription:     spec.LongDescription,
 		Config:              spec.Config,
 		Run:                 spec.Run,
-		Parent:              spec.Parent,
+		Parent:              parent,
 		createdByNewCommand: true,
 	}
 	if cmd.Parent != nil {
@@ -47,7 +47,6 @@ type Spec struct {
 	Name             string
 	ShortDescription string
 	LongDescription  string
-	Parent           *Command
 	Config           any
 	Run              func(ctx context.Context, config any, usagePrinter UsagePrinter) error
 }

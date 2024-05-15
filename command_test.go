@@ -65,32 +65,29 @@ func Test_initializeFlagSet(t *testing.T) {
 func Test_printCommandUsage(t *testing.T) {
 	t.Parallel()
 
-	rootCmd := New(Spec{
+	rootCmd := New(nil, Spec{
 		Name:             "root",
 		ShortDescription: "Root command",
 		LongDescription:  "This command is the\nroot command.",
 		Config:           &RootConfig{},
 	})
-	sub1Cmd := New(Spec{
+	sub1Cmd := New(rootCmd, Spec{
 		Name:             "sub1",
 		ShortDescription: "Sub command 1",
 		LongDescription:  "This command is the\nfirst sub command.",
 		Config:           &Sub1Config{},
-		Parent:           rootCmd,
 	})
-	sub2Cmd := New(Spec{
+	sub2Cmd := New(rootCmd, Spec{
 		Name:             "sub2",
 		ShortDescription: "Sub command 2",
 		LongDescription:  "This command is the\nsecond sub command.",
 		Config:           &Sub2Config{},
-		Parent:           rootCmd,
 	})
-	sub3Cmd := New(Spec{
+	sub3Cmd := New(sub2Cmd, Spec{
 		Name:             "sub3",
 		ShortDescription: "Sub command 3",
 		LongDescription:  "This command is the\nthird sub command.",
 		Config:           &Sub3Config{},
-		Parent:           sub2Cmd,
 	})
 
 	type testCase struct {
