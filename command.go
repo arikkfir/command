@@ -444,9 +444,11 @@ func Execute(ctx context.Context, w io.Writer, root *Command, args []string, env
 			return 1
 		}
 
-		if err := current.PreSubCommandRun(ctx, current.Config, current); err != nil {
-			_, _ = fmt.Fprintln(w, err.Error())
-			return 1
+		if current.PreSubCommandRun != nil {
+			if err := current.PreSubCommandRun(ctx, current.Config, current); err != nil {
+				_, _ = fmt.Fprintln(w, err.Error())
+				return 1
+			}
 		}
 	}
 
