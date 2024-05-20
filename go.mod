@@ -3,7 +3,7 @@ module github.com/arikkfir/command
 go 1.21.0
 
 require (
-	github.com/arikkfir/justest v0.2.0
+	github.com/arikkfir/justest v0.3.1
 	github.com/google/go-cmp v0.6.0
 )
 
