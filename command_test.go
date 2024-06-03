@@ -2,268 +2,426 @@ package command
 
 import (
 	"bytes"
-	"context"
-	"regexp"
+	"reflect"
+	"strings"
 	"testing"
 
 	. "github.com/arikkfir/justest"
+	"github.com/go-loremipsum/loremipsum"
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
-func Test_initializeFlagSet(t *testing.T) {
-	type Flag struct {
-		Name     string
-		Usage    string
-		Value    any
-		DefValue string
-	}
+func TestNew(t *testing.T) {
+	t.Parallel()
 	type testCase struct {
-		cmd             *Command
-		expectedFlags   []Flag
-		expectedFailure *string
+		commandFactory           func(T, *testCase) (*Command, error)
+		expectedName             string
+		expectedShortDescription string
+		expectedLongDescription  string
+		expectedError            string
+		expectedFlagSet          *flagSet
 	}
 	testCases := map[string]testCase{
-		"nil Config": {cmd: New(nil, Spec{Config: nil})},
-		"Config is a pointer to a struct": {
-			cmd: New(nil, Spec{Config: &RootConfig{S0: "v0"}}),
-			expectedFlags: []Flag{
-				{Name: "s0", DefValue: "v0", Usage: "String field", Value: nil},
-				{Name: "b0", DefValue: "false", Usage: "Bool field", Value: nil},
+		"empty name": {
+			commandFactory: func(t T, tc *testCase) (*Command, error) {
+				return New("", "short desc", "long desc", InlineExecutor{})
+			},
+			expectedError: `^invalid command: empty name$`,
+		},
+		"empty short description": {
+			commandFactory: func(t T, tc *testCase) (*Command, error) {
+				return New("cmd", "", "long desc", InlineExecutor{})
+			},
+			expectedError: `^invalid command: empty short description$`,
+		},
+		"nil executor": {
+			commandFactory: func(t T, tc *testCase) (*Command, error) {
+				return New("cmd", "desc", "long desc", nil)
+			},
+			expectedError: `^invalid command: nil executor$`,
+		},
+		"no flags": {
+			commandFactory: func(t T, tc *testCase) (*Command, error) {
+				return New("cmd", "desc", "long desc", InlineExecutor{})
+			},
+			expectedName:             "cmd",
+			expectedShortDescription: "desc",
+			expectedLongDescription:  "long desc",
+		},
+		"with flags": {
+			commandFactory: func(t T, tc *testCase) (*Command, error) {
+				return New(
+					"cmd",
+					"desc",
+					"long desc",
+					&struct {
+						InlineExecutor
+						MyFlag string `flag:"true"`
+					}{},
+				)
+			},
+			expectedFlagSet: &flagSet{
+				flags: []*flagDef{
+					{
+						flagInfo: flagInfo{
+							Name:     "my-flag",
+							HasValue: true,
+						},
+						Targets: []reflect.Value{},
+					},
+				},
 			},
 		},
 	}
 	for name, tc := range testCases {
+		tc := tc
 		t.Run(name, func(t *testing.T) {
-			tc := tc
-			t.Run(name, func(t *testing.T) {
-				if tc.expectedFailure != nil {
-					defer func() { With(t).Verify(recover()).Will(Say(*tc.expectedFailure)).OrFail() }()
+			t.Parallel()
+			cmd, err := tc.commandFactory(t, &tc)
+			if tc.expectedError != "" {
+				With(t).Verify(err).Will(Fail(tc.expectedError)).OrFail()
+			} else {
+				With(t).Verify(err).Will(BeNil()).OrFail()
+				if tc.expectedFlagSet != nil {
+					With(t).
+						Verify(cmd.flags.flags).
+						Will(EqualTo(
+							tc.expectedFlagSet.flags,
+							cmpopts.IgnoreFields(flagDef{}, "Targets"),
+							cmp.AllowUnexported(flagDef{})),
+						).
+						OrFail()
 				}
-				With(t).Verify(tc.cmd.initializeFlagSet()).Will(Succeed()).OrFail()
-				for _, expectedFlag := range tc.expectedFlags {
-					actualFlag := tc.cmd.flagSet.Lookup(expectedFlag.Name)
-					With(t).Verify(actualFlag).Will(Not(BeNil())).OrFail()
-					With(t).Verify(actualFlag.Usage).Will(EqualTo(expectedFlag.Usage)).OrFail()
-					With(t).Verify(actualFlag.DefValue).Will(EqualTo(expectedFlag.DefValue)).OrFail()
-				}
-			})
+			}
 		})
 	}
-	t.Run("Config must be a pointer to a struct", func(t *testing.T) {
-		With(t).
-			Verify(New(nil, Spec{Config: RootConfig{S0: "v0"}}).initializeFlagSet()).
-			Will(Fail(`must not be a struct, but a pointer to a struct`)).
-			OrFail()
-		With(t).
-			Verify(New(nil, Spec{Config: 1}).initializeFlagSet()).
-			Will(Fail(`is not a pointer: 1`)).
-			OrFail()
-		With(t).
-			Verify(New(nil, Spec{Config: &[]int{123}[0]}).initializeFlagSet()).
-			Will(Fail(`is not a pointer to struct`)).
-			OrFail()
-	})
 }
 
-func Test_printCommandUsage(t *testing.T) {
+func TestAddSubCommand(t *testing.T) {
 	t.Parallel()
 
-	rootCmd := New(nil, Spec{
-		Name:             "root",
-		ShortDescription: "Root command",
-		LongDescription:  "This command is the\nroot command.",
-		Config:           &RootConfig{},
-	})
-	sub1Cmd := New(rootCmd, Spec{
-		Name:             "sub1",
-		ShortDescription: "Sub command 1",
-		LongDescription:  "This command is the\nfirst sub command.",
-		Config:           &Sub1Config{},
-	})
-	sub2Cmd := New(rootCmd, Spec{
-		Name:             "sub2",
-		ShortDescription: "Sub command 2",
-		LongDescription:  "This command is the\nsecond sub command.",
-		Config:           &Sub2Config{},
-	})
-	sub3Cmd := New(sub2Cmd, Spec{
-		Name:             "sub3",
-		ShortDescription: "Sub command 3",
-		LongDescription:  "This command is the\nthird sub command.",
-		Config:           &Sub3Config{},
-	})
+	root, err := New("root", "desc", "description", &InlineExecutor{})
+	With(t).Verify(err).Will(BeNil()).OrFail()
 
+	sub1, err := New("sub1", "sub1 desc", "sub1 description", &InlineExecutor{})
+	With(t).Verify(err).Will(BeNil()).OrFail()
+
+	sub2, err := New("sub2", "sub2 desc", "sub2 description", &InlineExecutor{})
+	With(t).Verify(err).Will(BeNil()).OrFail()
+
+	With(t).Verify(root.AddSubCommand(sub1)).Will(BeNil()).OrFail()
+	With(t).Verify(root.AddSubCommand(sub2)).Will(BeNil()).OrFail()
+	With(t).Verify(root.subCommands[0], root.subCommands[1]).Will(EqualTo(sub1, sub2, cmpopts.EquateComparable(&Command{}))).OrFail()
+	With(t).Verify(sub1.parent).Will(EqualTo(root, cmpopts.EquateComparable(&Command{}))).OrFail()
+	With(t).Verify(sub2.parent).Will(EqualTo(root, cmpopts.EquateComparable(&Command{}))).OrFail()
+}
+
+func Test_inferCommandAndArgs(t *testing.T) {
 	type testCase struct {
-		cmd           *Command
-		expectedUsage string
+		root                *Command
+		args                []string
+		expectedCommand     string
+		expectedFlags       []string
+		expectedPositionals []string
 	}
-
 	testCases := map[string]testCase{
-		rootCmd.Name: {
-			cmd: rootCmd,
-			expectedUsage: `
-root: Root command
-
-This command is the
-root command.
-
-Usage:
-	root [--b0] [--help] --s0=VAL
-
-Flags:
-	--b0        Bool field (default is false)
-	--help      Show help about how to use this command (default is false)
-	--s0        String field
-
-Available sub-commands:
-	sub1      Sub command 1
-	sub2      Sub command 2
-
-`,
+		"No arguments": {
+			root: MustNew(
+				"root", "desc", "description", &InlineExecutor{},
+				MustNew("sub1", "sub1 desc", "sub1 description", &InlineExecutor{},
+					MustNew("sub2", "sub2 desc", "sub2 description", &InlineExecutor{},
+						MustNew("sub3", "sub3 desc", "sub3 description", &InlineExecutor{}),
+					),
+				),
+			),
+			args:                []string{},
+			expectedCommand:     "root",
+			expectedFlags:       nil,
+			expectedPositionals: nil,
 		},
-		sub1Cmd.Name: {
-			cmd: sub1Cmd,
-			expectedUsage: `
-root sub1: Sub command 1
-
-This command is the
-first sub command.
-
-Usage:
-	root sub1 [--b0] [--b1] [--help] --s0=VAL --s1=VALUE
-
-Flags:
-	--b0        Bool field (default is false)
-	--b1        Bool field (default is false)
-	--help      Show help about how to use this command (default is false)
-	--s0        String field
-	--s1        String field
-
-`,
+		"Flags for root command": {
+			root: MustNew(
+				"root", "desc", "description", &InlineExecutor{},
+				MustNew("sub1", "sub1 desc", "sub1 description", &InlineExecutor{},
+					MustNew("sub2", "sub2 desc", "sub2 description", &InlineExecutor{}),
+				),
+			),
+			args:                strings.Split("-f1 -f2", " "),
+			expectedCommand:     "root",
+			expectedFlags:       []string{"-f1", "-f2"},
+			expectedPositionals: nil,
 		},
-		sub2Cmd.Name: {
-			cmd: sub2Cmd,
-			expectedUsage: `
-root sub2: Sub command 2
-
-This command is the
-second sub command.
-
-Usage:
-	root sub2 [--b0] [--b1] [--b2] [--help] --s0=VAL --s1=VALUE [--s2=VALUE]
-
-Flags:
-	--b0        Bool field (default is false)
-	--b1        Bool field (default is false)
-	--b2        Bool field (default is false)
-	--help      Show help about how to use this command (default is false)
-	--s0        String field
-	--s1        String field
-	--s2        String field
-
-Available sub-commands:
-	sub3      Sub command 3
-
-`,
+		"Flags and positionals for root command": {
+			root: MustNew(
+				"root", "desc", "description", &InlineExecutor{},
+				MustNew("sub1", "sub1 desc", "sub1 description", &InlineExecutor{},
+					MustNew("sub2", "sub2 desc", "sub2 description", &InlineExecutor{}),
+				),
+			),
+			args:                strings.Split("-f1 a -f2 b", " "),
+			expectedCommand:     "root",
+			expectedFlags:       []string{"-f1", "-f2"},
+			expectedPositionals: []string{"a", "b"},
 		},
-		sub3Cmd.Name: {
-			cmd: sub3Cmd,
-			expectedUsage: `
-root sub2 sub3: Sub command 3
-
-This command is the
-third sub command.
-
-Usage:
-	root sub2 sub3 [--b0] [--b1] [--b2] [--b3] [--help] --s0=VAL --s1=VALUE [--s2=VALUE] [--s3=VALUE] [ARGS]
-
-Flags:
-	--b0        Bool field (default is false)
-	--b1        Bool field (default is false)
-	--b2        Bool field (default is false)
-	--b3        Bool field (default is false)
-	--help      Show help about how to use this command (default is false)
-	--s0        String field
-	--s1        String field
-	--s2        String field
-	--s3        String field
-
-`,
+		"Flags and positionals for sub1 command": {
+			root: MustNew(
+				"root", "desc", "description", &InlineExecutor{},
+				MustNew("sub1", "sub1 desc", "sub1 description", &InlineExecutor{},
+					MustNew("sub2", "sub2 desc", "sub2 description", &InlineExecutor{}),
+				),
+			),
+			args:                strings.Split("-f1 sub1 -f2 a b", " "),
+			expectedCommand:     "sub1",
+			expectedFlags:       []string{"-f1", "-f2"},
+			expectedPositionals: []string{"a", "b"},
+		},
+		"Flags and positionals for sub2 command": {
+			root: MustNew(
+				"root", "desc", "description", &InlineExecutor{},
+				MustNew("sub1", "sub1 desc", "sub1 description", &InlineExecutor{},
+					MustNew("sub2", "sub2 desc", "sub2 description", &InlineExecutor{}),
+				),
+			),
+			args:                strings.Split("-f1 sub1 -f2 a b sub2 c", " "),
+			expectedCommand:     "sub2",
+			expectedFlags:       []string{"-f1", "-f2"},
+			expectedPositionals: []string{"a", "b", "c"},
 		},
 	}
 	for name, tc := range testCases {
 		tc := tc
 		t.Run(name, func(t *testing.T) {
-			t.Parallel()
-			usageBuf := &bytes.Buffer{}
-
-			With(t).Verify(tc.cmd.initializeFlagSet()).Will(Succeed()).OrFail()
-			tc.cmd.printCommandUsage(usageBuf, false)
-			With(t).Verify(usageBuf.String()).Will(EqualTo(tc.expectedUsage[1:])).OrFail()
+			flags, positionals, cmd := tc.root.inferCommandAndArgs(tc.args)
+			With(t).Verify(flags).Will(EqualTo(tc.expectedFlags)).OrFail()
+			With(t).Verify(positionals).Will(EqualTo(tc.expectedPositionals)).OrFail()
+			With(t).Verify(cmd.name).Will(EqualTo(tc.expectedCommand)).OrFail()
 		})
 	}
 }
 
-func TestExecute(t *testing.T) {
-	t.Parallel()
-
-	rootSpec := Spec{Name: "root", ShortDescription: "Root!", LongDescription: "The root command.", Config: &RootConfig{}}
-	sub1Spec := Spec{Name: "sub1", ShortDescription: "Sub 1", LongDescription: "The first sub command.", Config: &Sub1Config{}}
-	sub2Spec := Spec{Name: "sub2", ShortDescription: "Sub 2", LongDescription: "The second sub command.", Config: &Sub2Config{}}
-	sub3Spec := Spec{Name: "sub3", ShortDescription: "Sub 3", LongDescription: "The third sub command.", Config: &Sub3Config{}}
-
+func Test_getFullName(t *testing.T) {
 	type testCase struct {
-		args                []string
-		envVars             []string
-		expectedExitCode    int
-		expectedPreRunCalls map[string]bool
-		expectedRunCalls    map[string]bool
-		expectedOutput      string
+		cmd              *Command
+		expectedFullName string
 	}
+	sub3 := MustNew("sub3", "sub3 desc", "sub3 description", &InlineExecutor{})
+	sub2 := MustNew("sub2", "sub2 desc", "sub2 description", &InlineExecutor{}, sub3)
+	sub1 := MustNew("sub1", "sub1 desc", "sub1 description", &InlineExecutor{}, sub2)
+	root := MustNew("root", "desc", "description", &InlineExecutor{}, sub1)
 	testCases := map[string]testCase{
-		"": {
-			args:                nil,
-			envVars:             nil,
-			expectedExitCode:    0,
-			expectedPreRunCalls: map[string]bool{"root": true},
-			expectedRunCalls:    map[string]bool{"root": true},
+		"root": {
+			cmd:              root,
+			expectedFullName: "root",
 		},
 		"sub1": {
-			args:                []string{"sub1"},
-			envVars:             nil,
-			expectedExitCode:    0,
-			expectedPreRunCalls: map[string]bool{"root": true, "sub1": true},
-			expectedRunCalls:    map[string]bool{"sub1": true},
+			cmd:              sub1,
+			expectedFullName: "root sub1",
 		},
-		"sub2 sub3": {
-			args:                []string{"sub2", "sub3"},
-			envVars:             nil,
-			expectedExitCode:    0,
-			expectedPreRunCalls: map[string]bool{"root": true, "sub2": true, "sub3": true},
-			expectedRunCalls:    map[string]bool{"sub3": true},
+		"sub2": {
+			cmd:              sub2,
+			expectedFullName: "root sub1 sub2",
 		},
-		"sub2 sub3 --help": {
-			args:                []string{"sub2", "sub3", "--help"},
-			envVars:             nil,
-			expectedExitCode:    0,
-			expectedPreRunCalls: map[string]bool{"root": true, "sub2": true, "sub3": true},
-			expectedRunCalls:    map[string]bool{},
-			expectedOutput: `root sub2 sub3: Sub 3
+		"sub3": {
+			cmd:              sub3,
+			expectedFullName: "root sub1 sub2 sub3",
+		},
+	}
+	for name, tc := range testCases {
+		tc := tc
+		t.Run(name, func(t *testing.T) {
+			With(t).Verify(tc.cmd.getFullName()).Will(EqualTo(tc.expectedFullName)).OrFail()
+		})
+	}
+}
 
-The third sub command.
+func Test_getChain(t *testing.T) {
+	type testCase struct {
+		cmd           *Command
+		expectedChain []string
+	}
+	sub3 := MustNew("sub3", "sub3 desc", "sub3 description", &InlineExecutor{})
+	sub2 := MustNew("sub2", "sub2 desc", "sub2 description", &InlineExecutor{}, sub3)
+	sub1 := MustNew("sub1", "sub1 desc", "sub1 description", &InlineExecutor{}, sub2)
+	root := MustNew("root", "desc", "description", &InlineExecutor{}, sub1)
+	testCases := map[string]testCase{
+		"root": {
+			cmd:           root,
+			expectedChain: []string{"root"},
+		},
+		"sub1": {
+			cmd:           sub1,
+			expectedChain: []string{"root", "sub1"},
+		},
+		"sub2": {
+			cmd:           sub2,
+			expectedChain: []string{"root", "sub1", "sub2"},
+		},
+		"sub3": {
+			cmd:           sub3,
+			expectedChain: []string{"root", "sub1", "sub2", "sub3"},
+		},
+	}
+	for name, tc := range testCases {
+		tc := tc
+		t.Run(name, func(t *testing.T) {
+			var chainNames []string
+			for _, cmd := range tc.cmd.getChain() {
+				chainNames = append(chainNames, cmd.name)
+			}
+			With(t).Verify(chainNames).Will(EqualTo(tc.expectedChain)).OrFail()
+		})
+	}
+}
+
+func TestPrintHelp(t *testing.T) {
+	t.Parallel()
+
+	type testCase struct {
+		commandFactory          func(*testCase) *Command
+		expectedHelpOutput      string
+		expectedHelpUsageOutput string
+	}
+	testCases := map[string]testCase{
+		"no flags & no positionals": {
+			commandFactory: func(*testCase) *Command {
+				ligen := loremipsum.NewWithSeed(4321)
+				return MustNew("cmd", ligen.Sentence(), ligen.Sentences(2), InlineExecutor{})
+			},
+			expectedHelpUsageOutput: `
+Usage: cmd [--help]
+`,
+			expectedHelpOutput: `
+cmd: Lorem ipsum dolor sit amet consectetur 
+    adipiscing elit ac, purus molestie luctus nec 
+    neque cursus conubia vehicula rutrum primis 
+    laoreet vivamus sed nisl lobortis efficitur 
+    ultrices.
+
+Description: Lorem ipsum dolor sit amet 
+    consectetur adipiscing elit ac, purus 
+    molestie luctus nec. Urna magnis platea risus 
+    habitant diam pellentesque per mauris 
+    consequat, nec ex dis vehicula convallis 
+    habitasse vel molestie auctor suspendisse 
+    efficitur rutrum praesent eleifend quisque 
+    volutpat curae quis lectus.
 
 Usage:
-	root sub2 sub3 [--b0] [--b1] [--b2] [--b3] [--help] --s0=VAL --s1=VALUE [--s2=VALUE] [--s3=VALUE] [ARGS]
+    cmd [--help]
 
 Flags:
-	--b0        Bool field (default is false)
-	--b1        Bool field (default is false)
-	--b2        Bool field (default is false)
-	--b3        Bool field (default is false)
-	--help      Show help about how to use this command (default is false)
-	--s0        String field
-	--s1        String field
-	--s2        String field
-	--s3        String field
+    [--help]  Show this help screen and exit. 
+              (default value: false, environment 
+              variable: HELP)
+
+`,
+		},
+		"with flags, args": {
+			commandFactory: func(*testCase) *Command {
+				ligen := loremipsum.NewWithSeed(4321)
+				return MustNew("cmd", ligen.Sentence(), ligen.Sentences(2), &struct {
+					InlineExecutor
+					MyFlag string   `desc:"flag description"`
+					Args   []string `args:"true"`
+				}{})
+			},
+			expectedHelpUsageOutput: `
+Usage: cmd [--help] 
+    [--my-flag=VALUE] 
+    [ARGS...]
+`,
+			expectedHelpOutput: `
+cmd: Lorem ipsum dolor sit amet consectetur 
+    adipiscing elit ac, purus molestie luctus nec 
+    neque cursus conubia vehicula rutrum primis 
+    laoreet vivamus sed nisl lobortis efficitur 
+    ultrices.
+
+Description: Lorem ipsum dolor sit amet 
+    consectetur adipiscing elit ac, purus 
+    molestie luctus nec. Urna magnis platea risus 
+    habitant diam pellentesque per mauris 
+    consequat, nec ex dis vehicula convallis 
+    habitasse vel molestie auctor suspendisse 
+    efficitur rutrum praesent eleifend quisque 
+    volutpat curae quis lectus.
+
+Usage:
+    cmd [--help] [--my-flag=VALUE] [ARGS...]
+
+Flags:
+    [--help]            Show this help screen and 
+                        exit. (default value: 
+                        false, environment 
+                        variable: HELP)
+    [--my-flag=VALUE]   flag description 
+                        (environment variable: 
+                        MY_FLAG)
+
+`,
+		},
+		"with sub-commands": {
+			commandFactory: func(*testCase) *Command {
+				ligen := loremipsum.NewWithSeed(4321)
+				return MustNew(
+					"cmd",
+					ligen.Sentence(),
+					ligen.Sentences(2),
+					&struct {
+						InlineExecutor
+						MyFlag string   `desc:"flag description"`
+						Args   []string `args:"true"`
+					}{},
+					MustNew(
+						"child1", ligen.Sentence(), ligen.Sentences(2), &struct {
+							InlineExecutor
+							SubFlag string   `desc:"sub flag description"`
+							Args    []string `args:"true"`
+						}{},
+					),
+				)
+			},
+			expectedHelpUsageOutput: `
+Usage: cmd [--help] 
+    [--my-flag=VALUE] 
+    [ARGS...]
+`,
+			expectedHelpOutput: `
+cmd: Lorem ipsum dolor sit amet consectetur 
+    adipiscing elit ac, purus molestie luctus nec 
+    neque cursus conubia vehicula rutrum primis 
+    laoreet vivamus sed nisl lobortis efficitur 
+    ultrices.
+
+Description: Lorem ipsum dolor sit amet 
+    consectetur adipiscing elit ac, purus 
+    molestie luctus nec. Urna magnis platea risus 
+    habitant diam pellentesque per mauris 
+    consequat, nec ex dis vehicula convallis 
+    habitasse vel molestie auctor suspendisse 
+    efficitur rutrum praesent eleifend quisque 
+    volutpat curae quis lectus.
+
+Usage:
+    cmd [--help] [--my-flag=VALUE] [ARGS...]
+
+Flags:
+    [--help]            Show this help screen and 
+                        exit. (default value: 
+                        false, environment 
+                        variable: HELP)
+    [--my-flag=VALUE]   flag description 
+                        (environment variable: 
+                        MY_FLAG)
+
+Available sub-commands:
+    child1    Et dolor viverra nulla ipsum 
+              finibus curae conubia gravida 
+              elementum litora eleifend class 
+              porttitor morbi nisi mus non 
+              consequat pharetra convallis 
+              bibendum rhoncus etiam.
 
 `,
 		},
@@ -273,62 +431,15 @@ Flags:
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			preRunCalls := make(map[string]bool)
-			runCalls := make(map[string]bool)
-
-			rootSpec := rootSpec
-			rootSpec.OnSubCommandRun = func(ctx context.Context, config any, usagePrinter UsagePrinter) error {
-				preRunCalls["root"] = true
-				return nil
-			}
-			rootSpec.Run = func(ctx context.Context, config any, usagePrinter UsagePrinter) error {
-				runCalls["root"] = true
-				return nil
-			}
-			rootCmd := New(nil, rootSpec)
-
-			sub1Spec := sub1Spec
-			sub1Spec.OnSubCommandRun = func(ctx context.Context, config any, usagePrinter UsagePrinter) error {
-				preRunCalls["sub1"] = true
-				return nil
-			}
-			sub1Spec.Run = func(ctx context.Context, config any, usagePrinter UsagePrinter) error {
-				runCalls["sub1"] = true
-				return nil
-			}
-			sub1Cmd := New(rootCmd, sub1Spec)
-
-			sub2Spec := sub2Spec
-			sub2Spec.OnSubCommandRun = func(ctx context.Context, config any, usagePrinter UsagePrinter) error {
-				preRunCalls["sub2"] = true
-				return nil
-			}
-			sub2Spec.Run = func(ctx context.Context, config any, usagePrinter UsagePrinter) error {
-				runCalls["sub2"] = true
-				return nil
-			}
-			sub2Cmd := New(rootCmd, sub2Spec)
-
-			sub3Spec := sub3Spec
-			sub3Spec.OnSubCommandRun = func(ctx context.Context, config any, usagePrinter UsagePrinter) error {
-				preRunCalls["sub3"] = true
-				return nil
-			}
-			sub3Spec.Run = func(ctx context.Context, config any, usagePrinter UsagePrinter) error {
-				runCalls["sub3"] = true
-				return nil
-			}
-			sub3Cmd := New(sub2Cmd, sub3Spec)
-			_, _, _, _ = rootCmd, sub1Cmd, sub2Cmd, sub3Cmd
-
+			cmd := tc.commandFactory(&tc)
 			b := &bytes.Buffer{}
-			exitCode := Execute(context.Background(), b, rootCmd, tc.args, EnvVarsArrayToMap(tc.envVars))
-			With(t).Verify(exitCode).Will(EqualTo(tc.expectedExitCode)).OrFail()
-			With(t).Verify(preRunCalls).Will(EqualTo(tc.expectedPreRunCalls)).OrFail()
-			With(t).Verify(runCalls).Will(EqualTo(tc.expectedRunCalls)).OrFail()
-			if tc.expectedOutput != "" {
-				With(t).Verify(b).Will(Say(`^` + regexp.QuoteMeta(tc.expectedOutput) + `$`)).OrFail()
-			}
+
+			With(t).Verify(cmd.PrintHelp(b, 50)).Will(Succeed()).OrFail()
+			With(t).Verify(b.String()).Will(EqualTo(tc.expectedHelpOutput[1:])).OrFail()
+
+			b.Reset()
+			With(t).Verify(cmd.PrintUsageLine(b, 30)).Will(Succeed()).OrFail()
+			With(t).Verify(b.String()).Will(EqualTo(tc.expectedHelpUsageOutput[1:])).OrFail()
 		})
 	}
 }

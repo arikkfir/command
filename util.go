@@ -2,9 +2,30 @@ package command
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"unicode"
+
+	"golang.org/x/sys/unix"
 )
+
+func ptrOf[T any](v T) *T {
+	return &v
+}
+
+func defaultIfNil[T any](v *T, defaultValue T) T {
+	if v == nil {
+		return defaultValue
+	}
+	return *v
+}
+
+func intForBool(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
+}
 
 func fieldNameToFlagName(fieldName string) string {
 	var result []rune
@@ -25,6 +46,10 @@ func fieldNameToFlagName(fieldName string) string {
 		}
 	}
 	return string(result)
+}
+
+func flagNameToEnvVarName(flagName string) string {
+	return strings.ReplaceAll(strings.ToUpper(flagName), "-", "_")
 }
 
 func fieldNameToEnvVarName(fieldName string) string {
@@ -48,43 +73,7 @@ func fieldNameToEnvVarName(fieldName string) string {
 	return string(result)
 }
 
-func environmentVariableToFlagName(name string) string {
-	return strings.ReplaceAll(strings.ToLower(name), "_", "-")
-}
-
-func inferCommandFlagsAndPositionals(root *Command, args []string) (*Command, []string, []string) {
-	var flagArgs []string
-	var positionalArgs []string
-
-	cmd := root
-	onlyPositionalArgs := false
-	for i := 0; i < len(args); i++ {
-		arg := args[i]
-
-		if onlyPositionalArgs {
-			positionalArgs = append(positionalArgs, arg)
-		} else if arg == "--" {
-			onlyPositionalArgs = true
-		} else if strings.HasPrefix(arg, "-") {
-			flagArgs = append(flagArgs, arg)
-		} else {
-			found := false
-			for _, subCmd := range cmd.subCommands {
-				if subCmd.Name == arg {
-					cmd = subCmd
-					found = true
-					break
-				}
-			}
-			if !found {
-				positionalArgs = append(positionalArgs, arg)
-			}
-		}
-	}
-
-	return cmd, flagArgs, positionalArgs
-}
-
+//goland:noinspection GoUnusedExportedFunction
 func EnvVarsArrayToMap(envVars []string) map[string]string {
 	envVarsMap := make(map[string]string)
 	for _, nameValue := range envVars {
@@ -95,4 +84,13 @@ func EnvVarsArrayToMap(envVars []string) map[string]string {
 		envVarsMap[parts[0]] = parts[1]
 	}
 	return envVarsMap
+}
+
+func getTerminalWidth() int {
+	fd := int(os.Stdout.Fd())
+	ws, err := unix.IoctlGetWinsize(fd, unix.TIOCGWINSZ)
+	if err != nil {
+		return 80
+	}
+	return int(ws.Col)
 }
