@@ -47,31 +47,43 @@ demo
  ...
 ```
 
-For `root.go`, use this:
+For `command2.go` use this:
 
 ```go
 package main
 
 import (
-	"os"
-	"path/filepath"
+	"context"
+	"fmt"
 
 	"github.com/arikkfir/command"
 )
 
-type RootConfig struct{
-	SomeFlag string `desc:"This flag is a demo flag of type string."` // We can provide flag descriptions
+type Command2 struct {
+	MyFlag1 string `flag:"true"`
+	MyFlag2 int    `desc:"mf2" required:"true"`
 }
 
-var rootCommand = command.New(nil, command.Spec{
-	Name:             filepath.Base(os.Args[0]),
-	ShortDescription: "This is the root command.",
-	LongDescription: `This is the command executed when no sub-commands are specified in the command line, e.g. like
-running "kubectl" and pressing ENTER.`,
-	Config: &RootConfig{
-		SomeFlag1: "default value for this flag, unless given in CLI via --some-flag or via environment variables as SOME_FLAG",
+func (c *Command2) PreRun(ctx context.Context) error {
+	// Invoked every time this command or any of its sub-commands are run
+	fmt.Println(c.MyFlag1)
+	return nil
+}
+
+func (c *Command2) Run(ctx context.Context) error {
+	// Invoked when this command is run
+	fmt.Println(c.MyFlag2)
+	return nil
+}
+
+var cmd2 = command.MustNew(
+	"command2",
+	"This is command2, a magnificent command that does something.",
+	`Longer description...`,
+	&Command2{
+		MyFlag1: "default value for --my-flag1",
 	},
-})
+)
 ```
 
 For `command1.go` use this:
@@ -86,30 +98,35 @@ import (
 	"github.com/arikkfir/command"
 )
 
-type Command1Config struct {
-	RootConfig // Root command's configuration can also be provided to this command (e.g. "--some-flag")
-	AnotherFlag int `config:"required" desc:"This is another flag, of type int."` // Notice how we made this flag required
+type Command1 struct {
+	AnotherFlag bool   `flag:"true"`
+	MyURL       string `value-name:"URL" env:"HTTP_URL"`
 }
 
-var cmd1Command = command.New(rootCommand, command.Spec{
-	Name:             "command1",
-	ShortDescription: "This is command1, a magnificent command that does something.",
-	LongDescription:  `Longer description...`,
-	Config:           &Command1Config{
-		RootConfig: RootConfig{
-			SomeFlag: "override the default value",
-		},
-		AnotherFlag: "default for AnotherFlag", // set in CLI as "--another-flag" or environment variable ANOTHER_FLAG
+func (c *Command1) PreRun(ctx context.Context) error {
+	// Invoked every time this command or any of its sub-commands are run
+	fmt.Println(c.AnotherFlag)
+	return nil
+}
+
+func (c *Command1) Run(ctx context.Context) error {
+	// Invoked when this command is run
+	fmt.Println(c.MyURL)
+	return nil
+}
+
+var cmd1 = command.MustNew(
+	"command1",
+	"This is command1, a magnificent command that does something.",
+	`Longer description...`,
+	&Command1{
+		MyURL: "default value for --my-url",
 	},
-	Run: func(ctx context.Context, anyConfig any, utils command.UsagePrinter) error {
-		config := anyConfig.(*Command1Config)
-		fmt.Printf("Running command1! Configuration is: %+v\n", config)
-		return nil
-	},
-})
+	cmd2, // Adding cmd2 as a sub-command of cmd1
+)
 ```
 
-For `command2.go` use this:
+For `root.go`, use this:
 
 ```go
 package main
@@ -121,30 +138,33 @@ import (
 	"github.com/arikkfir/command"
 )
 
-type Command2Config struct {
-	Command1Config
-	YetAnotherFlag string `desc:"And another one..."`
-	Positionals []string  `config:"args"` // This field will get all the non-flag positional arguments for the command
+type Root struct {
+	Args []string `args:"true"`
+	Port int      `value-name:"PORT" env:"HTTP_PORT"`
 }
 
-var cmd2Command = command.New(cmd1Command, command.Spec{
-	Name:             "command2",
-	ShortDescription: "This is command2, another magnificent command that does something.",
-	Config:           &Command1Config{
-		Command1Config: Command1Config{
-			RootConfig: RootConfig{
-				SomeFlag: "override the default value",
-			},
-			AnotherFlag: "default value", 
-		},
-		YetAnotherFlag: "default for YetAnotherFlag",
+func (c *Root) PreRun(ctx context.Context) error {
+	// Invoked every time this command or any of its sub-commands are run
+	fmt.Println(c.Port)
+	return nil
+}
+
+func (c *Root) Run(ctx context.Context) error {
+	// Invoked when this command is run
+	fmt.Println(c.Port)
+	return nil
+}
+
+var root = command.MustNew(
+	filepath.Base(os.Args[0]),
+	"This is the root command.",
+	`This is the command executed when no sub-commands are specified in the command line, e.g. like
+running "kubectl" and pressing ENTER.`,
+	&Root{
+		Port: "default value for --port",
 	},
-	Run: func(ctx context.Context, anyConfig any, utils command.UsagePrinter) error {
-		config := anyConfig.(*Command2Config)
-		fmt.Printf("Running command2! Configuration is: %+v\n", config)
-		return nil
-	},
-})
+	cmd1, // Adding cmd1 as a sub-command of root
+)
 ```
 
 And finally create `main.go` like so:
@@ -153,13 +173,14 @@ And finally create `main.go` like so:
 package main
 
 import (
+	"context"
 	"os"
 
 	"github.com/arikkfir/command"
 )
 
 func main() {
-	command.Execute(rootCommand, os.Args, command.EnvVarsArrayToMap(os.Environ()))
+	command.Execute(context.Context(), os.Stderr, root, os.Args, command.EnvVarsArrayToMap(os.Environ()))
 }
 ```
 
@@ -249,19 +270,22 @@ You can use Go tags for the configuration fields:
 ```go
 package main
 
-type MyConfig struct {
-	RequiredField string `config:"required" desc:"This is a required field."`
-	IgnoredField string  `config:"ignore"` // No flags will be generated for this field and it is not configurable via environment variables
-	Args []string        `config:"args"` // This field will get all the non-flag positional arguments for the command
+type MyCommand struct {
+	FlagWithDefaults  string   `flag:"true"`
+	ModifyCLIFlagName string   `name:"another-name"`     // Use "another-name" instead of "modify-cli-flag-name"
+	ModifyEnvVarName  string   `env:"CUSTOM"`            // Use "CUSTOM" env-var instead of "MODIFY_CLI_ENV_VAR_NAME"
+	ModifyValueName   string   `value-name:"PORT"`       // Show "--modify-value-name=PORT" instead of "--modify-value-name=VALUE" on help screen
+	ModifyDesc        string   `desc:"Flag description"` // Describe what this flag does
+	ModifyRequired    string   `required:"true"`         // Make the flag required
+	ModifyInherited   string   `inherited:"true"`        // Sub-commands will get this flag as well
+	Args              []string `args:"true"`             // This field will get all the non-flag positional arguments for the command
 }
 ```
 
 ## Field types
 
 Configuration fields cab be of type `string`, `int`, `uint`, `float64`, `bool`, or a `struct` containing additional
-flags. When providing configuration in the command spec, **you must provide a pointer to the configuration struct**.
-
-New types will be added soon (e.g. `time.Time`, `time.Duration`, `net.IP`, and more).
+flags. New types will be added soon (e.g. `time.Time`, `time.Duration`, `net.IP`, and more).
 
 ## Contributing
 
