@@ -72,14 +72,16 @@ type flagSet struct {
 	positionalsTargets []*[]string
 }
 
-func newFlagSet(parent *flagSet, valueOfConfig reflect.Value) (*flagSet, error) {
+func newFlagSet(parent *flagSet, objects ...reflect.Value) (*flagSet, error) {
 	fs := &flagSet{parent: parent}
-	if valueOfConfig.Kind() == reflect.Ptr && valueOfConfig.Type().Elem().Kind() == reflect.Struct {
-		if valueOfConfig.IsNil() {
-			valueOfConfig.Set(reflect.New(valueOfConfig.Type().Elem()))
-		}
-		if err := fs.readFlagsFromStruct(valueOfConfig.Elem(), false); err != nil {
-			return nil, err
+	for _, c := range objects {
+		if c.Kind() == reflect.Ptr && c.Type().Elem().Kind() == reflect.Struct {
+			if c.IsNil() {
+				c.Set(reflect.New(c.Type().Elem()))
+			}
+			if err := fs.readFlagsFromStruct(c.Elem(), false); err != nil {
+				return nil, err
+			}
 		}
 	}
 	return fs, nil
