@@ -1,6 +1,7 @@
 package command
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -18,13 +19,42 @@ type HelpConfig struct {
 	Help bool `inherited:"true" desc:"Show this help screen and exit."`
 }
 
+type Action interface {
+	Run(context.Context) error
+}
+
+type ActionFunc func(context.Context) error
+
+func (i ActionFunc) Run(ctx context.Context) error {
+	if i != nil {
+		return i(ctx)
+	} else {
+		return nil
+	}
+}
+
+type PreRunHook interface {
+	PreRun(context.Context) error
+}
+
+type PreRunHookFunc func(context.Context) error
+
+func (i PreRunHookFunc) PreRun(ctx context.Context) error {
+	if i != nil {
+		return i(ctx)
+	} else {
+		return nil
+	}
+}
+
 // Command is a command instance, created by [New] and can be composed with more Command instances to form a CLI command
 // hierarchy.
 type Command struct {
 	name             string
 	shortDescription string
 	longDescription  string
-	executor         Executor
+	preRunHooks      []PreRunHook
+	action           Action
 	flags            *flagSet
 	parent           *Command
 	subCommands      []*Command
@@ -34,8 +64,8 @@ type Command struct {
 // MustNew creates a new command using [New], but will panic if it returns an error.
 //
 //goland:noinspection GoUnusedExportedFunction
-func MustNew(name, shortDescription, longDescription string, executor Executor, subCommands ...*Command) *Command {
-	cmd, err := New(name, shortDescription, longDescription, executor, subCommands...)
+func MustNew(name, shortDescription, longDescription string, action Action, preRunHooks []PreRunHook, subCommands ...*Command) *Command {
+	cmd, err := New(name, shortDescription, longDescription, action, preRunHooks, subCommands...)
 	if err != nil {
 		panic(err)
 	}
@@ -44,13 +74,11 @@ func MustNew(name, shortDescription, longDescription string, executor Executor, 
 
 // New creates a new command with the given name, short & long descriptions, and the given executor. The executor object
 // is also scanned for configuration structs via reflection.
-func New(name, shortDescription, longDescription string, executor Executor, subCommands ...*Command) (*Command, error) {
+func New(name, shortDescription, longDescription string, action Action, preRunHooks []PreRunHook, subCommands ...*Command) (*Command, error) {
 	if name == "" {
 		return nil, fmt.Errorf("%w: empty name", ErrInvalidCommand)
 	} else if shortDescription == "" {
 		return nil, fmt.Errorf("%w: empty short description", ErrInvalidCommand)
-	} else if executor == nil {
-		return nil, fmt.Errorf("%w: nil executor", ErrInvalidCommand)
 	}
 
 	// Create the command instance
@@ -58,7 +86,8 @@ func New(name, shortDescription, longDescription string, executor Executor, subC
 		name:             name,
 		shortDescription: shortDescription,
 		longDescription:  longDescription,
-		executor:         executor,
+		action:           action,
+		preRunHooks:      preRunHooks,
 		HelpConfig:       &HelpConfig{},
 	}
 
@@ -84,14 +113,21 @@ func (c *Command) setParent(parent *Command) error {
 	var parentFlags *flagSet
 	if parent != nil {
 		parentFlags = parent.flags
-	} else if fs, err := newFlagSet(nil, reflect.ValueOf(c).Elem().FieldByName("HelpConfig")); err != nil {
+	} else if parentFlagSet, err := newFlagSet(nil, reflect.ValueOf(c).Elem().FieldByName("HelpConfig")); err != nil {
 		return fmt.Errorf("failed creating Help flag set: %w", err)
 	} else {
-		parentFlags = fs
+		parentFlags = parentFlagSet
 	}
 
 	// Create the flag-set
-	if fs, err := newFlagSet(parentFlags, reflect.ValueOf(c.executor)); err != nil {
+	var configObjects []reflect.Value
+	if c.action != nil {
+		configObjects = append(configObjects, reflect.ValueOf(c.action))
+	}
+	for _, hook := range c.preRunHooks {
+		configObjects = append(configObjects, reflect.ValueOf(hook))
+	}
+	if fs, err := newFlagSet(parentFlags, configObjects...); err != nil {
 		return fmt.Errorf("failed creating flag-set for command '%s': %w", c.name, err)
 	} else {
 		c.parent = parent
