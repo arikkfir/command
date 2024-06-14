@@ -221,4 +221,35 @@ Flags:
 		With(t).Verify(rootPostRunHook.providedExitCode).Will(EqualTo(exitCode)).OrFail()
 	})
 
+	t.Run("missing required flags fail execution", func(t *testing.T) {
+		type ActionWithRequiredFlag struct {
+			TrackingAction
+			MyFlag string `required:"true"`
+		}
+		action := &ActionWithRequiredFlag{}
+		ctx := context.Background()
+		root := MustNew("cmd", "desc", "long desc", action, nil, nil)
+
+		b := &bytes.Buffer{}
+		With(t).Verify(Execute(ctx, b, root, nil, nil)).Will(EqualTo(ExitCodeMisconfiguration)).OrFail()
+		With(t).Verify(action.TrackingAction.callTime).Will(BeNil()).OrFail()
+		With(t).Verify(b.String()).Will(EqualTo("required flag is missing: --my-flag\nUsage: cmd [--help] --my-flag=VALUE\n")).OrFail()
+	})
+
+	t.Run("required flags with default value do not fail execution", func(t *testing.T) {
+		type ActionWithRequiredFlag struct {
+			TrackingAction
+			MyFlag string `required:"true"`
+		}
+		action := &ActionWithRequiredFlag{
+			MyFlag: "abc",
+		}
+		ctx := context.Background()
+		root := MustNew("cmd", "desc", "long desc", action, nil, nil)
+
+		b := &bytes.Buffer{}
+		With(t).Verify(Execute(ctx, b, root, nil, nil)).Will(EqualTo(ExitCodeSuccess)).OrFail()
+		With(t).Verify(action.TrackingAction.callTime).Will(Not(BeNil())).OrFail()
+		With(t).Verify(b.String()).Will(BeEmpty()).OrFail()
+	})
 }
