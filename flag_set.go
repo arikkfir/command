@@ -363,19 +363,28 @@ func (fs *flagSet) apply(envVars map[string]string, args []string) error {
 	// Iterate flags and define them in the stdlib FlagSet
 	for _, mfd := range mergedFlagDefs {
 
+		// By definition, for the same name - all flags have the same "HasValue" value, so it should be safe to just
+		// take it from the first one
+		if mfd.HasValue {
+
+			// Set the field's default value so it's marked as "applied" (and thus the "required" validation will ignore it)
+			if mfd.DefaultValue != "" {
+				if err := mfd.setValue(mfd.DefaultValue); err != nil {
+					return fmt.Errorf("failed applying default value for flag '%s': %w", mfd.Name, err)
+				}
+			}
+			stdFs.Func(mfd.Name, "", func(v string) error { return mfd.setValue(v) })
+
+		} else {
+			stdFs.BoolFunc(mfd.Name, "", func(string) error { return mfd.setValue("true") })
+		}
+
 		// Set the value to the flag's corresponding environment variable, if one was given
+		// Important this is done here, so it overrides the default value set earlier
 		if v, found := envVars[*mfd.EnvVarName]; found {
 			if err := mfd.setValue(v); err != nil {
 				return err
 			}
-		}
-
-		// By definition, for the same name - all flags have the same "HasValue" value, so it should be safe to just
-		// take it from the first one
-		if mfd.HasValue {
-			stdFs.Func(mfd.Name, "", func(v string) error { return mfd.setValue(v) })
-		} else {
-			stdFs.BoolFunc(mfd.Name, "", func(string) error { return mfd.setValue("true") })
 		}
 	}
 
