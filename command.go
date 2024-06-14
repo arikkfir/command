@@ -47,6 +47,20 @@ func (i PreRunHookFunc) PreRun(ctx context.Context) error {
 	}
 }
 
+type PostRunHook interface {
+	PostRun(context.Context, error, ExitCode) error
+}
+
+type PostRunHookFunc func(context.Context, error, ExitCode) error
+
+func (i PostRunHookFunc) PostRun(ctx context.Context, err error, exitCode ExitCode) error {
+	if i != nil {
+		return i(ctx, err, exitCode)
+	} else {
+		return nil
+	}
+}
+
 // Command is a command instance, created by [New] and can be composed with more Command instances to form a CLI command
 // hierarchy.
 type Command struct {
@@ -54,6 +68,7 @@ type Command struct {
 	shortDescription string
 	longDescription  string
 	preRunHooks      []PreRunHook
+	postRunHooks     []PostRunHook
 	action           Action
 	flags            *flagSet
 	parent           *Command
@@ -64,8 +79,8 @@ type Command struct {
 // MustNew creates a new command using [New], but will panic if it returns an error.
 //
 //goland:noinspection GoUnusedExportedFunction
-func MustNew(name, shortDescription, longDescription string, action Action, preRunHooks []PreRunHook, subCommands ...*Command) *Command {
-	cmd, err := New(name, shortDescription, longDescription, action, preRunHooks, subCommands...)
+func MustNew(name, shortDescription, longDescription string, action Action, preRunHooks []PreRunHook, postRunHooks []PostRunHook, subCommands ...*Command) *Command {
+	cmd, err := New(name, shortDescription, longDescription, action, preRunHooks, postRunHooks, subCommands...)
 	if err != nil {
 		panic(err)
 	}
@@ -74,7 +89,7 @@ func MustNew(name, shortDescription, longDescription string, action Action, preR
 
 // New creates a new command with the given name, short & long descriptions, and the given executor. The executor object
 // is also scanned for configuration structs via reflection.
-func New(name, shortDescription, longDescription string, action Action, preRunHooks []PreRunHook, subCommands ...*Command) (*Command, error) {
+func New(name, shortDescription, longDescription string, action Action, preRunHooks []PreRunHook, postRunHooks []PostRunHook, subCommands ...*Command) (*Command, error) {
 	if name == "" {
 		return nil, fmt.Errorf("%w: empty name", ErrInvalidCommand)
 	} else if shortDescription == "" {
@@ -88,6 +103,7 @@ func New(name, shortDescription, longDescription string, action Action, preRunHo
 		longDescription:  longDescription,
 		action:           action,
 		preRunHooks:      preRunHooks,
+		postRunHooks:     postRunHooks,
 		HelpConfig:       &HelpConfig{},
 	}
 
