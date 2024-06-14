@@ -978,6 +978,26 @@ func TestFlagSetApply(t *testing.T) {
 			args:          []string{"--my-field1=VVV1"},
 			expectedError: `^required flag is missing: --my-field2$`,
 		},
+		"bool flag default value is considered": {
+			config: &struct {
+				F1 bool `name:"my-field1" required:"true"`
+			}{F1: false},
+			envVars: map[string]string{},
+			args:    []string{},
+			expectedConfig: &struct {
+				F1 bool `name:"my-field1" required:"true"`
+			}{F1: false},
+		},
+		"bool flag default value overridden by arg": {
+			config: &struct {
+				F1 bool `name:"my-field1" required:"true"`
+			}{F1: false},
+			envVars: map[string]string{},
+			args:    []string{"--my-field1"},
+			expectedConfig: &struct {
+				F1 bool `name:"my-field1" required:"true"`
+			}{F1: true},
+		},
 	}
 	for name, tc := range testCases {
 		tc := tc
