@@ -69,8 +69,8 @@ func TestExecute(t *testing.T) {
 
 	t.Run("command must be root", func(t *testing.T) {
 		ctx := context.Background()
-		child := MustNew("child", "desc", "long desc", nil, nil, nil)
-		_ = MustNew("root", "desc", "long desc", nil, nil, nil, child)
+		child := MustNew("child", "desc", "long desc", nil, nil)
+		_ = MustNew("root", "desc", "long desc", nil, nil, child)
 		b := &bytes.Buffer{}
 		With(t).Verify(Execute(ctx, b, child, nil, nil)).Will(EqualTo(ExitCodeError)).OrFail()
 		With(t).Verify(b).Will(Say(`^unsupported operation: command must be the root command$`)).OrFail()
@@ -78,14 +78,14 @@ func TestExecute(t *testing.T) {
 
 	t.Run("applies configuration", func(t *testing.T) {
 		ctx := context.Background()
-		cmd := MustNew("cmd", "desc", "long desc", &ActionWithConfig{}, nil, nil)
+		cmd := MustNew("cmd", "desc", "long desc", &ActionWithConfig{}, nil)
 		With(t).Verify(Execute(ctx, os.Stderr, cmd, []string{"--my-flag=V1"}, nil)).Will(EqualTo(ExitCodeSuccess)).OrFail()
 		With(t).Verify(cmd.action.(*ActionWithConfig).MyFlag).Will(EqualTo("V1")).OrFail()
 	})
 
 	t.Run("prints usage on CLI parse errors", func(t *testing.T) {
 		ctx := context.Background()
-		cmd := MustNew("cmd", "desc", "long desc", &ActionWithConfig{}, nil, nil)
+		cmd := MustNew("cmd", "desc", "long desc", &ActionWithConfig{}, nil)
 		b := &bytes.Buffer{}
 		With(t).Verify(Execute(ctx, b, cmd, []string{"--bad-flag=V1"}, nil)).Will(EqualTo(ExitCodeMisconfiguration)).OrFail()
 		With(t).Verify(cmd.action.(*ActionWithConfig).MyFlag).Will(BeEmpty()).OrFail()
@@ -94,7 +94,7 @@ func TestExecute(t *testing.T) {
 
 	t.Run("prints help on --help flag", func(t *testing.T) {
 		ctx := context.Background()
-		cmd := MustNew("cmd", "desc", "long desc", &ActionWithConfig{}, nil, nil)
+		cmd := MustNew("cmd", "desc", "long desc", &ActionWithConfig{}, nil)
 		b := &bytes.Buffer{}
 		With(t).Verify(Execute(ctx, b, cmd, []string{"--help"}, nil)).Will(EqualTo(ExitCodeSuccess)).OrFail()
 		With(t).Verify(b.String()).Will(EqualTo(`
@@ -115,9 +115,9 @@ Flags:
 
 	t.Run("preRun called for command chain", func(t *testing.T) {
 		ctx := context.Background()
-		sub2 := MustNew("sub2", "desc", "long desc", &ActionWithConfig{}, []PreRunHook{&PreRunHookWithConfig{}}, nil)
-		sub1 := MustNew("sub1", "desc", "long desc", nil, []PreRunHook{&PreRunHookWithConfig{}}, nil, sub2)
-		root := MustNew("cmd", "desc", "long desc", nil, []PreRunHook{&PreRunHookWithConfig{}}, nil, sub1)
+		sub2 := MustNew("sub2", "desc", "long desc", &ActionWithConfig{}, []any{&PreRunHookWithConfig{}})
+		sub1 := MustNew("sub1", "desc", "long desc", nil, []any{&PreRunHookWithConfig{}}, sub2)
+		root := MustNew("cmd", "desc", "long desc", nil, []any{&PreRunHookWithConfig{}}, sub1)
 		With(t).Verify(Execute(ctx, os.Stderr, root, []string{"sub1", "sub2"}, nil)).Will(EqualTo(ExitCodeSuccess)).OrFail()
 
 		rootPreRunHook := root.preRunHooks[0].(*PreRunHookWithConfig)
@@ -140,9 +140,9 @@ Flags:
 		passThroughPreHook := func() PreRunHook { return &PreRunHookWithConfig{} }
 
 		ctx := context.Background()
-		sub2 := MustNew("sub2", "desc", "long desc", &ActionWithConfig{}, []PreRunHook{passThroughPreHook()}, nil)
-		sub1 := MustNew("sub1", "desc", "long desc", nil, []PreRunHook{passThroughPreHook(), failingPreHook}, nil, sub2)
-		root := MustNew("cmd", "desc", "long desc", nil, []PreRunHook{passThroughPreHook()}, nil, sub1)
+		sub2 := MustNew("sub2", "desc", "long desc", &ActionWithConfig{}, []any{passThroughPreHook()})
+		sub1 := MustNew("sub1", "desc", "long desc", nil, []any{passThroughPreHook(), failingPreHook}, sub2)
+		root := MustNew("cmd", "desc", "long desc", nil, []any{passThroughPreHook()}, sub1)
 
 		rootPreRunHook := root.preRunHooks[0].(*PreRunHookWithConfig)
 		sub1PreRunHook := sub1.preRunHooks[0].(*PreRunHookWithConfig)
@@ -159,9 +159,9 @@ Flags:
 
 	t.Run("postRun called for command chain", func(t *testing.T) {
 		ctx := context.Background()
-		sub2 := MustNew("sub2", "desc", "long desc", &ActionWithConfig{}, nil, []PostRunHook{&PostRunHookWithConfig{}})
-		sub1 := MustNew("sub1", "desc", "long desc", nil, nil, []PostRunHook{&PostRunHookWithConfig{}}, sub2)
-		root := MustNew("cmd", "desc", "long desc", nil, nil, []PostRunHook{&PostRunHookWithConfig{}}, sub1)
+		sub2 := MustNew("sub2", "desc", "long desc", &ActionWithConfig{}, []any{&PostRunHookWithConfig{}})
+		sub1 := MustNew("sub1", "desc", "long desc", nil, []any{&PostRunHookWithConfig{}}, sub2)
+		root := MustNew("cmd", "desc", "long desc", nil, []any{&PostRunHookWithConfig{}}, sub1)
 
 		exitCode := Execute(ctx, os.Stderr, root, []string{"sub1", "sub2"}, nil)
 		With(t).Verify(exitCode).Will(EqualTo(ExitCodeSuccess)).OrFail()
@@ -194,9 +194,9 @@ Flags:
 		failingAction := &ActionWithConfig{TrackingAction: TrackingAction{errorToReturnOnCall: fmt.Errorf("failing action")}}
 
 		ctx := context.Background()
-		sub2 := MustNew("sub2", "desc", "long desc", failingAction, nil, []PostRunHook{failingPostHook()})
-		sub1 := MustNew("sub1", "desc", "long desc", nil, nil, []PostRunHook{passThroughPostHook()}, sub2)
-		root := MustNew("cmd", "desc", "long desc", nil, nil, []PostRunHook{passThroughPostHook()}, sub1)
+		sub2 := MustNew("sub2", "desc", "long desc", failingAction, []any{failingPostHook()})
+		sub1 := MustNew("sub1", "desc", "long desc", nil, []any{passThroughPostHook()}, sub2)
+		root := MustNew("cmd", "desc", "long desc", nil, []any{passThroughPostHook()}, sub1)
 
 		exitCode := Execute(ctx, os.Stderr, root, []string{"sub1", "sub2"}, nil)
 		With(t).Verify(exitCode).Will(EqualTo(ExitCodeError)).OrFail()
@@ -228,7 +228,7 @@ Flags:
 		}
 		action := &ActionWithRequiredFlag{}
 		ctx := context.Background()
-		root := MustNew("cmd", "desc", "long desc", action, nil, nil)
+		root := MustNew("cmd", "desc", "long desc", action, nil)
 
 		b := &bytes.Buffer{}
 		With(t).Verify(Execute(ctx, b, root, nil, nil)).Will(EqualTo(ExitCodeMisconfiguration)).OrFail()
@@ -245,7 +245,7 @@ Flags:
 			MyFlag: "abc",
 		}
 		ctx := context.Background()
-		root := MustNew("cmd", "desc", "long desc", action, nil, nil)
+		root := MustNew("cmd", "desc", "long desc", action, nil)
 
 		b := &bytes.Buffer{}
 		With(t).Verify(Execute(ctx, b, root, nil, nil)).Will(EqualTo(ExitCodeSuccess)).OrFail()

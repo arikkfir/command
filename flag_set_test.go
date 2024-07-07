@@ -978,6 +978,18 @@ func TestFlagSetApply(t *testing.T) {
 			args:          []string{"--my-field1=VVV1"},
 			expectedError: `^required flag is missing: --my-field2$`,
 		},
+		"optional string field is not required": {
+			config: &struct {
+				F1 string `desc:"Some desc."`
+				F2 string `required:"true" desc:"Some desc."`
+			}{F2: "v2"},
+			envVars: map[string]string{},
+			args:    []string{},
+			expectedConfig: &struct {
+				F1 string `desc:"Some desc."`
+				F2 string `required:"true" desc:"Some desc."`
+			}{F1: "", F2: "v2"},
+		},
 		"bool flag default value is considered": {
 			config: &struct {
 				F1 bool `name:"my-field1" required:"true"`

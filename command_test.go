@@ -25,19 +25,19 @@ func TestNew(t *testing.T) {
 	testCases := map[string]testCase{
 		"empty name": {
 			commandFactory: func(t T, tc *testCase) (*Command, error) {
-				return New("", "short desc", "long desc", nil, nil, nil)
+				return New("", "short desc", "long desc", nil, nil)
 			},
 			expectedError: `^invalid command: empty name$`,
 		},
 		"empty short description": {
 			commandFactory: func(t T, tc *testCase) (*Command, error) {
-				return New("cmd", "", "long desc", nil, nil, nil)
+				return New("cmd", "", "long desc", nil, nil)
 			},
 			expectedError: `^invalid command: empty short description$`,
 		},
 		"no flags": {
 			commandFactory: func(t T, tc *testCase) (*Command, error) {
-				return New("cmd", "desc", "long desc", nil, nil, nil)
+				return New("cmd", "desc", "long desc", nil, nil)
 			},
 			expectedName:             "cmd",
 			expectedShortDescription: "desc",
@@ -53,7 +53,6 @@ func TestNew(t *testing.T) {
 						Action
 						MyFlag string `flag:"true"`
 					}{},
-					nil,
 					nil,
 				)
 			},
@@ -97,13 +96,13 @@ func TestNew(t *testing.T) {
 func TestAddSubCommand(t *testing.T) {
 	t.Parallel()
 
-	root, err := New("root", "desc", "description", nil, nil, nil)
+	root, err := New("root", "desc", "description", nil, nil)
 	With(t).Verify(err).Will(BeNil()).OrFail()
 
-	sub1, err := New("sub1", "sub1 desc", "sub1 description", nil, nil, nil)
+	sub1, err := New("sub1", "sub1 desc", "sub1 description", nil, nil)
 	With(t).Verify(err).Will(BeNil()).OrFail()
 
-	sub2, err := New("sub2", "sub2 desc", "sub2 description", nil, nil, nil)
+	sub2, err := New("sub2", "sub2 desc", "sub2 description", nil, nil)
 	With(t).Verify(err).Will(BeNil()).OrFail()
 
 	With(t).Verify(root.AddSubCommand(sub1)).Will(BeNil()).OrFail()
@@ -124,10 +123,10 @@ func Test_inferCommandAndArgs(t *testing.T) {
 	testCases := map[string]testCase{
 		"No arguments": {
 			root: MustNew(
-				"root", "desc", "description", nil, nil, nil,
-				MustNew("sub1", "sub1 desc", "sub1 description", nil, nil, nil,
-					MustNew("sub2", "sub2 desc", "sub2 description", nil, nil, nil,
-						MustNew("sub3", "sub3 desc", "sub3 description", nil, nil, nil),
+				"root", "desc", "description", nil, nil,
+				MustNew("sub1", "sub1 desc", "sub1 description", nil, nil,
+					MustNew("sub2", "sub2 desc", "sub2 description", nil, nil,
+						MustNew("sub3", "sub3 desc", "sub3 description", nil, nil),
 					),
 				),
 			),
@@ -138,9 +137,9 @@ func Test_inferCommandAndArgs(t *testing.T) {
 		},
 		"Flags for root command": {
 			root: MustNew(
-				"root", "desc", "description", nil, nil, nil,
-				MustNew("sub1", "sub1 desc", "sub1 description", nil, nil, nil,
-					MustNew("sub2", "sub2 desc", "sub2 description", nil, nil, nil),
+				"root", "desc", "description", nil, nil,
+				MustNew("sub1", "sub1 desc", "sub1 description", nil, nil,
+					MustNew("sub2", "sub2 desc", "sub2 description", nil, nil),
 				),
 			),
 			args:                strings.Split("-f1 -f2", " "),
@@ -150,9 +149,9 @@ func Test_inferCommandAndArgs(t *testing.T) {
 		},
 		"Flags and positionals for root command": {
 			root: MustNew(
-				"root", "desc", "description", nil, nil, nil,
-				MustNew("sub1", "sub1 desc", "sub1 description", nil, nil, nil,
-					MustNew("sub2", "sub2 desc", "sub2 description", nil, nil, nil),
+				"root", "desc", "description", nil, nil,
+				MustNew("sub1", "sub1 desc", "sub1 description", nil, nil,
+					MustNew("sub2", "sub2 desc", "sub2 description", nil, nil),
 				),
 			),
 			args:                strings.Split("-f1 a -f2 b", " "),
@@ -162,9 +161,9 @@ func Test_inferCommandAndArgs(t *testing.T) {
 		},
 		"Flags and positionals for sub1 command": {
 			root: MustNew(
-				"root", "desc", "description", nil, nil, nil,
-				MustNew("sub1", "sub1 desc", "sub1 description", nil, nil, nil,
-					MustNew("sub2", "sub2 desc", "sub2 description", nil, nil, nil),
+				"root", "desc", "description", nil, nil,
+				MustNew("sub1", "sub1 desc", "sub1 description", nil, nil,
+					MustNew("sub2", "sub2 desc", "sub2 description", nil, nil),
 				),
 			),
 			args:                strings.Split("-f1 sub1 -f2 a b", " "),
@@ -174,9 +173,9 @@ func Test_inferCommandAndArgs(t *testing.T) {
 		},
 		"Flags and positionals for sub2 command": {
 			root: MustNew(
-				"root", "desc", "description", nil, nil, nil,
-				MustNew("sub1", "sub1 desc", "sub1 description", nil, nil, nil,
-					MustNew("sub2", "sub2 desc", "sub2 description", nil, nil, nil),
+				"root", "desc", "description", nil, nil,
+				MustNew("sub1", "sub1 desc", "sub1 description", nil, nil,
+					MustNew("sub2", "sub2 desc", "sub2 description", nil, nil),
 				),
 			),
 			args:                strings.Split("-f1 sub1 -f2 a b sub2 c", " "),
@@ -201,10 +200,10 @@ func Test_getFullName(t *testing.T) {
 		cmd              *Command
 		expectedFullName string
 	}
-	sub3 := MustNew("sub3", "sub3 desc", "sub3 description", nil, nil, nil)
-	sub2 := MustNew("sub2", "sub2 desc", "sub2 description", nil, nil, nil, sub3)
-	sub1 := MustNew("sub1", "sub1 desc", "sub1 description", nil, nil, nil, sub2)
-	root := MustNew("root", "desc", "description", nil, nil, nil, sub1)
+	sub3 := MustNew("sub3", "sub3 desc", "sub3 description", nil, nil)
+	sub2 := MustNew("sub2", "sub2 desc", "sub2 description", nil, nil, sub3)
+	sub1 := MustNew("sub1", "sub1 desc", "sub1 description", nil, nil, sub2)
+	root := MustNew("root", "desc", "description", nil, nil, sub1)
 	testCases := map[string]testCase{
 		"root": {
 			cmd:              root,
@@ -236,10 +235,10 @@ func Test_getChain(t *testing.T) {
 		cmd           *Command
 		expectedChain []string
 	}
-	sub3 := MustNew("sub3", "sub3 desc", "sub3 description", nil, nil, nil)
-	sub2 := MustNew("sub2", "sub2 desc", "sub2 description", nil, nil, nil, sub3)
-	sub1 := MustNew("sub1", "sub1 desc", "sub1 description", nil, nil, nil, sub2)
-	root := MustNew("root", "desc", "description", nil, nil, nil, sub1)
+	sub3 := MustNew("sub3", "sub3 desc", "sub3 description", nil, nil)
+	sub2 := MustNew("sub2", "sub2 desc", "sub2 description", nil, nil, sub3)
+	sub1 := MustNew("sub1", "sub1 desc", "sub1 description", nil, nil, sub2)
+	root := MustNew("root", "desc", "description", nil, nil, sub1)
 	testCases := map[string]testCase{
 		"root": {
 			cmd:           root,
@@ -282,7 +281,7 @@ func TestPrintHelp(t *testing.T) {
 		"no flags & no positionals": {
 			commandFactory: func(*testCase) *Command {
 				ligen := loremipsum.NewWithSeed(4321)
-				return MustNew("cmd", ligen.Sentence(), ligen.Sentences(2), nil, nil, nil)
+				return MustNew("cmd", ligen.Sentence(), ligen.Sentences(2), nil, nil)
 			},
 			expectedHelpUsageOutput: `
 Usage: cmd [--help]
@@ -325,7 +324,6 @@ Flags:
 						MyFlag string   `desc:"flag description"`
 						Args   []string `args:"true"`
 					}{},
-					nil,
 					nil,
 				)
 			},
@@ -377,7 +375,6 @@ Flags:
 						Args   []string `args:"true"`
 					}{},
 					nil,
-					nil,
 					MustNew(
 						"child1",
 						ligen.Sentence(),
@@ -387,7 +384,6 @@ Flags:
 							SubFlag string   `desc:"sub flag description"`
 							Args    []string `args:"true"`
 						}{},
-						nil,
 						nil,
 					),
 				)

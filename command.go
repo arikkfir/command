@@ -79,8 +79,8 @@ type Command struct {
 // MustNew creates a new command using [New], but will panic if it returns an error.
 //
 //goland:noinspection GoUnusedExportedFunction
-func MustNew(name, shortDescription, longDescription string, action Action, preRunHooks []PreRunHook, postRunHooks []PostRunHook, subCommands ...*Command) *Command {
-	cmd, err := New(name, shortDescription, longDescription, action, preRunHooks, postRunHooks, subCommands...)
+func MustNew(name, shortDescription, longDescription string, action Action, hooks []any, subCommands ...*Command) *Command {
+	cmd, err := New(name, shortDescription, longDescription, action, hooks, subCommands...)
 	if err != nil {
 		panic(err)
 	}
@@ -89,11 +89,30 @@ func MustNew(name, shortDescription, longDescription string, action Action, preR
 
 // New creates a new command with the given name, short & long descriptions, and the given executor. The executor object
 // is also scanned for configuration structs via reflection.
-func New(name, shortDescription, longDescription string, action Action, preRunHooks []PreRunHook, postRunHooks []PostRunHook, subCommands ...*Command) (*Command, error) {
+func New(name, shortDescription, longDescription string, action Action, hooks []any, subCommands ...*Command) (*Command, error) {
 	if name == "" {
 		return nil, fmt.Errorf("%w: empty name", ErrInvalidCommand)
 	} else if shortDescription == "" {
 		return nil, fmt.Errorf("%w: empty short description", ErrInvalidCommand)
+	}
+
+	// Translate the any-based hooks list into pre-run and post-run hooks
+	// Fail on any hook that doesn't implement at least one of them
+	var preRunHooks []PreRunHook
+	var postRunHooks []PostRunHook
+	for i, hook := range hooks {
+		var pre, post bool
+		if preRunHook, ok := hook.(PreRunHook); ok {
+			preRunHooks = append(preRunHooks, preRunHook)
+			pre = true
+		}
+		if postRunHook, ok := hook.(PostRunHook); ok {
+			postRunHooks = append(postRunHooks, postRunHook)
+			post = true
+		}
+		if !pre && !post {
+			return nil, fmt.Errorf("%w: hook %d (%T) is neither a PreRunHook nor a PostRunHook", ErrInvalidCommand, i, hook)
+		}
 	}
 
 	// Create the command instance
