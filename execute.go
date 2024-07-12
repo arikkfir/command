@@ -60,11 +60,12 @@ func ExecuteWithContext(ctx context.Context, w io.Writer, root *Command, args []
 	// Ensure we invoke post-run hooks before we return
 	chain := cmd.getChain()
 	defer func() {
+		postHooksCtx := context.Background()
 		for i := len(chain) - 1; i >= 0; i-- {
 			c := chain[i]
 			for j := len(c.postRunHooks) - 1; j >= 0; j-- {
 				h := c.postRunHooks[j]
-				if err := h.PostRun(ctx, actionError, exitCode); err != nil {
+				if err := h.PostRun(postHooksCtx, actionError, exitCode); err != nil {
 					_, _ = fmt.Fprintln(w, err)
 					exitCode = ExitCodeError
 				}
