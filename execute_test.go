@@ -72,14 +72,14 @@ func TestExecute(t *testing.T) {
 		child := MustNew("child", "desc", "long desc", nil, nil)
 		_ = MustNew("root", "desc", "long desc", nil, nil, child)
 		b := &bytes.Buffer{}
-		With(t).Verify(Execute(ctx, b, child, nil, nil)).Will(EqualTo(ExitCodeError)).OrFail()
+		With(t).Verify(ExecuteWithContext(ctx, b, child, nil, nil)).Will(EqualTo(ExitCodeError)).OrFail()
 		With(t).Verify(b).Will(Say(`^unsupported operation: command must be the root command$`)).OrFail()
 	})
 
 	t.Run("applies configuration", func(t *testing.T) {
 		ctx := context.Background()
 		cmd := MustNew("cmd", "desc", "long desc", &ActionWithConfig{}, nil)
-		With(t).Verify(Execute(ctx, os.Stderr, cmd, []string{"--my-flag=V1"}, nil)).Will(EqualTo(ExitCodeSuccess)).OrFail()
+		With(t).Verify(ExecuteWithContext(ctx, os.Stderr, cmd, []string{"--my-flag=V1"}, nil)).Will(EqualTo(ExitCodeSuccess)).OrFail()
 		With(t).Verify(cmd.action.(*ActionWithConfig).MyFlag).Will(EqualTo("V1")).OrFail()
 	})
 
@@ -87,7 +87,7 @@ func TestExecute(t *testing.T) {
 		ctx := context.Background()
 		cmd := MustNew("cmd", "desc", "long desc", &ActionWithConfig{}, nil)
 		b := &bytes.Buffer{}
-		With(t).Verify(Execute(ctx, b, cmd, []string{"--bad-flag=V1"}, nil)).Will(EqualTo(ExitCodeMisconfiguration)).OrFail()
+		With(t).Verify(ExecuteWithContext(ctx, b, cmd, []string{"--bad-flag=V1"}, nil)).Will(EqualTo(ExitCodeMisconfiguration)).OrFail()
 		With(t).Verify(cmd.action.(*ActionWithConfig).MyFlag).Will(BeEmpty()).OrFail()
 		With(t).Verify(b.String()).Will(EqualTo("unknown flag: --bad-flag\nUsage: cmd [--help] [--my-flag=VALUE]\n")).OrFail()
 	})
@@ -96,7 +96,7 @@ func TestExecute(t *testing.T) {
 		ctx := context.Background()
 		cmd := MustNew("cmd", "desc", "long desc", &ActionWithConfig{}, nil)
 		b := &bytes.Buffer{}
-		With(t).Verify(Execute(ctx, b, cmd, []string{"--help"}, nil)).Will(EqualTo(ExitCodeSuccess)).OrFail()
+		With(t).Verify(ExecuteWithContext(ctx, b, cmd, []string{"--help"}, nil)).Will(EqualTo(ExitCodeSuccess)).OrFail()
 		With(t).Verify(b.String()).Will(EqualTo(`
 cmd: desc
 
@@ -118,7 +118,7 @@ Flags:
 		sub2 := MustNew("sub2", "desc", "long desc", &ActionWithConfig{}, []any{&PreRunHookWithConfig{}})
 		sub1 := MustNew("sub1", "desc", "long desc", nil, []any{&PreRunHookWithConfig{}}, sub2)
 		root := MustNew("cmd", "desc", "long desc", nil, []any{&PreRunHookWithConfig{}}, sub1)
-		With(t).Verify(Execute(ctx, os.Stderr, root, []string{"sub1", "sub2"}, nil)).Will(EqualTo(ExitCodeSuccess)).OrFail()
+		With(t).Verify(ExecuteWithContext(ctx, os.Stderr, root, []string{"sub1", "sub2"}, nil)).Will(EqualTo(ExitCodeSuccess)).OrFail()
 
 		rootPreRunHook := root.preRunHooks[0].(*PreRunHookWithConfig)
 		sub1PreRunHook := sub1.preRunHooks[0].(*PreRunHookWithConfig)
@@ -149,7 +149,7 @@ Flags:
 		sub2PreRunHook := sub2.preRunHooks[0].(*PreRunHookWithConfig)
 		sub2Action := sub2.action.(*ActionWithConfig)
 
-		With(t).Verify(Execute(ctx, os.Stderr, root, []string{"sub1", "sub2"}, nil)).Will(EqualTo(ExitCodeError)).OrFail()
+		With(t).Verify(ExecuteWithContext(ctx, os.Stderr, root, []string{"sub1", "sub2"}, nil)).Will(EqualTo(ExitCodeError)).OrFail()
 		With(t).Verify(rootPreRunHook.callTime).Will(Not(BeNil())).OrFail()
 		With(t).Verify(rootPreRunHook.callTime.Before(*sub1PreRunHook.callTime)).Will(EqualTo(true)).OrFail()
 		With(t).Verify(sub1PreRunHook.callTime).Will(Not(BeNil())).OrFail()
@@ -163,7 +163,7 @@ Flags:
 		sub1 := MustNew("sub1", "desc", "long desc", nil, []any{&PostRunHookWithConfig{}}, sub2)
 		root := MustNew("cmd", "desc", "long desc", nil, []any{&PostRunHookWithConfig{}}, sub1)
 
-		exitCode := Execute(ctx, os.Stderr, root, []string{"sub1", "sub2"}, nil)
+		exitCode := ExecuteWithContext(ctx, os.Stderr, root, []string{"sub1", "sub2"}, nil)
 		With(t).Verify(exitCode).Will(EqualTo(ExitCodeSuccess)).OrFail()
 
 		rootPostRunHook := root.postRunHooks[0].(*PostRunHookWithConfig)
@@ -198,7 +198,7 @@ Flags:
 		sub1 := MustNew("sub1", "desc", "long desc", nil, []any{passThroughPostHook()}, sub2)
 		root := MustNew("cmd", "desc", "long desc", nil, []any{passThroughPostHook()}, sub1)
 
-		exitCode := Execute(ctx, os.Stderr, root, []string{"sub1", "sub2"}, nil)
+		exitCode := ExecuteWithContext(ctx, os.Stderr, root, []string{"sub1", "sub2"}, nil)
 		With(t).Verify(exitCode).Will(EqualTo(ExitCodeError)).OrFail()
 
 		rootPostRunHook := root.postRunHooks[0].(*PostRunHookWithConfig)
@@ -231,7 +231,7 @@ Flags:
 		root := MustNew("cmd", "desc", "long desc", action, nil)
 
 		b := &bytes.Buffer{}
-		With(t).Verify(Execute(ctx, b, root, nil, nil)).Will(EqualTo(ExitCodeMisconfiguration)).OrFail()
+		With(t).Verify(ExecuteWithContext(ctx, b, root, nil, nil)).Will(EqualTo(ExitCodeMisconfiguration)).OrFail()
 		With(t).Verify(action.TrackingAction.callTime).Will(BeNil()).OrFail()
 		With(t).Verify(b.String()).Will(EqualTo("required flag is missing: --my-flag\nUsage: cmd [--help] --my-flag=VALUE\n")).OrFail()
 	})
@@ -248,7 +248,7 @@ Flags:
 		root := MustNew("cmd", "desc", "long desc", action, nil)
 
 		b := &bytes.Buffer{}
-		With(t).Verify(Execute(ctx, b, root, nil, nil)).Will(EqualTo(ExitCodeSuccess)).OrFail()
+		With(t).Verify(ExecuteWithContext(ctx, b, root, nil, nil)).Will(EqualTo(ExitCodeSuccess)).OrFail()
 		With(t).Verify(action.TrackingAction.callTime).Will(Not(BeNil())).OrFail()
 		With(t).Verify(b.String()).Will(BeEmpty()).OrFail()
 	})
