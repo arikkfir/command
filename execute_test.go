@@ -14,11 +14,13 @@ import (
 
 type TrackingAction struct {
 	callTime            *time.Time
+	providedCtx         context.Context
 	errorToReturnOnCall error
 }
 
-func (a *TrackingAction) Run(_ context.Context) error {
+func (a *TrackingAction) Run(ctx context.Context) error {
 	a.callTime = ptrOf(time.Now())
+	a.providedCtx = ctx
 	time.Sleep(100 * time.Millisecond)
 	return a.errorToReturnOnCall
 }
@@ -36,13 +38,15 @@ func (a *TrackingPreRunHook) PreRun(_ context.Context) error {
 
 type TrackingPostRunHook struct {
 	callTime            *time.Time
+	providedCtx         context.Context
 	providedActionError error
 	providedExitCode    ExitCode
 	errorToReturnOnCall error
 }
 
-func (a *TrackingPostRunHook) PostRun(_ context.Context, actionError error, exitCode ExitCode) error {
+func (a *TrackingPostRunHook) PostRun(ctx context.Context, actionError error, exitCode ExitCode) error {
 	a.callTime = ptrOf(time.Now())
+	a.providedCtx = ctx
 	a.providedActionError = actionError
 	a.providedExitCode = exitCode
 	time.Sleep(100 * time.Millisecond)
@@ -251,5 +255,25 @@ Flags:
 		With(t).Verify(ExecuteWithContext(ctx, b, root, nil, nil)).Will(EqualTo(ExitCodeSuccess)).OrFail()
 		With(t).Verify(action.TrackingAction.callTime).Will(Not(BeNil())).OrFail()
 		With(t).Verify(b.String()).Will(BeEmpty()).OrFail()
+	})
+
+	t.Run("ensure post-hooks use fresh context", func(t *testing.T) {
+		//nolint:all
+		executionCtx := context.WithValue(context.Background(), "k", "v")
+
+		action := &TrackingAction{}
+		root := MustNew("cmd", "desc", "long desc", action, []any{&PostRunHookWithConfig{}})
+
+		exitCode := ExecuteWithContext(executionCtx, os.Stderr, root, nil, nil)
+		With(t).Verify(exitCode).Will(EqualTo(ExitCodeSuccess)).OrFail()
+
+		if action.providedCtx != executionCtx {
+			t.Fatalf("incorrect context passed to action: %+v", action.providedCtx)
+		}
+
+		rootPostRunHook := root.postRunHooks[0].(*PostRunHookWithConfig)
+		if rootPostRunHook.providedCtx == executionCtx {
+			t.Fatalf("incorrect context passed to posthook: %+v", rootPostRunHook.providedCtx)
+		}
 	})
 }
