@@ -6,7 +6,7 @@ require (
 	github.com/arikkfir/justest v0.3.1
 	github.com/go-loremipsum/loremipsum v1.1.3
 	github.com/google/go-cmp v0.6.0
-	golang.org/x/sys v0.21.0
+	golang.org/x/sys v0.22.0
 )
 
 require (
