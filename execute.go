@@ -15,10 +15,10 @@ const (
 	ExitCodeMisconfiguration ExitCode = 2
 )
 
-// Execute the correct command in the given command hierarchy (starting at "root"), configured from the given CLI args
-// and environment variables. The command will be executed with the given context after all pre-RunFunc hooks have been
-// successfully executed in the command hierarchy.
-func Execute(ctx context.Context, w io.Writer, root *Command, args []string, envVars map[string]string) (exitCode ExitCode) {
+// ExecuteWithContext the correct command in the given command hierarchy (starting at "root"), configured from the given
+// CLI args and environment variables. The command will be executed with the given context after all pre-RunFunc hooks
+// have been successfully executed in the command hierarchy.
+func ExecuteWithContext(ctx context.Context, w io.Writer, root *Command, args []string, envVars map[string]string) (exitCode ExitCode) {
 	exitCode = ExitCodeSuccess
 
 	// We insist on getting the root command - so that we can infer correctly which command the user wanted to invoke
@@ -60,11 +60,12 @@ func Execute(ctx context.Context, w io.Writer, root *Command, args []string, env
 	// Ensure we invoke post-run hooks before we return
 	chain := cmd.getChain()
 	defer func() {
+		postHooksCtx := context.Background()
 		for i := len(chain) - 1; i >= 0; i-- {
 			c := chain[i]
 			for j := len(c.postRunHooks) - 1; j >= 0; j-- {
 				h := c.postRunHooks[j]
-				if err := h.PostRun(ctx, actionError, exitCode); err != nil {
+				if err := h.PostRun(postHooksCtx, actionError, exitCode); err != nil {
 					_, _ = fmt.Fprintln(w, err)
 					exitCode = ExitCodeError
 				}
@@ -102,4 +103,17 @@ func Execute(ctx context.Context, w io.Writer, root *Command, args []string, env
 		}
 	}
 	return
+}
+
+// Execute the correct command in the given command hierarchy (starting at "root"), configured from the given
+// CLI args and environment variables. The command will be executed with a context that gets canceled when an OS signal
+// for termination is received, after all pre-RunFunc hooks have been successfully executed in the command hierarchy.
+//
+//goland:noinspection GoUnusedExportedFunction
+func Execute(w io.Writer, root *Command, args []string, envVars map[string]string) ExitCode {
+	// Prepare a context that gets canceled if OS termination signals are sent
+	ctx, cancel := context.WithCancel(SetupSignalHandler())
+	defer cancel()
+
+	return ExecuteWithContext(ctx, w, root, args, envVars)
 }
