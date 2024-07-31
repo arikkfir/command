@@ -53,7 +53,16 @@ func TestNew(t *testing.T) {
 						Action
 						MyFlag string `flag:"true"`
 					}{},
-					nil,
+					[]any{
+						&struct {
+							TrackingPreRunHook
+							PreRunFlag string `flag:"true"`
+						}{},
+						&struct {
+							TrackingPostRunHook
+							PostRunFlag string `flag:"true"`
+						}{},
+					},
 				)
 			},
 			expectedFlagSet: &flagSet{
@@ -61,6 +70,20 @@ func TestNew(t *testing.T) {
 					{
 						flagInfo: flagInfo{
 							Name:     "my-flag",
+							HasValue: true,
+						},
+						Targets: []reflect.Value{},
+					},
+					{
+						flagInfo: flagInfo{
+							Name:     "pre-run-flag",
+							HasValue: true,
+						},
+						Targets: []reflect.Value{},
+					},
+					{
+						flagInfo: flagInfo{
+							Name:     "post-run-flag",
 							HasValue: true,
 						},
 						Targets: []reflect.Value{},
