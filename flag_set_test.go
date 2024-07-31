@@ -960,6 +960,55 @@ func TestFlagSetApply(t *testing.T) {
 				Float64Array: []float64{11.22, 33.44, 55.66},
 			},
 		},
+		"all types are supported from ENV": {
+			config: &struct {
+				String             string    `flag:"true"`
+				Int                int       `flag:"true"`
+				Float32            float32   `flag:"true"`
+				Float64            float64   `flag:"true"`
+				Bool               bool      `flag:"true"`
+				StringArray        []string  `flag:"true"`
+				IntArray           []int     `flag:"true"`
+				Float32Array       []float32 `flag:"true"`
+				Float64Array       []float64 `flag:"true"`
+				HTTPAllowedOrigins []string  `flag:"true"`
+			}{},
+			envVars: map[string]string{
+				"STRING":               "s1",
+				"INT":                  "9",
+				"FLOAT32":              "1.2",
+				"FLOAT64":              "123.456",
+				"BOOL":                 "true",
+				"STRING_ARRAY":         `sa1,"s with space",sa3,,,`,
+				"INT_ARRAY":            "1,2,3,5,8",
+				"FLOAT32ARRAY":         "1.2,3.4,5.6",
+				"FLOAT64ARRAY":         "11.22,33.44,55.66",
+				"HTTP_ALLOWED_ORIGINS": "a,b,c",
+			},
+			expectedConfig: &struct {
+				String             string    `flag:"true"`
+				Int                int       `flag:"true"`
+				Float32            float32   `flag:"true"`
+				Float64            float64   `flag:"true"`
+				Bool               bool      `flag:"true"`
+				StringArray        []string  `flag:"true"`
+				IntArray           []int     `flag:"true"`
+				Float32Array       []float32 `flag:"true"`
+				Float64Array       []float64 `flag:"true"`
+				HTTPAllowedOrigins []string  `flag:"true"`
+			}{
+				String:             "s1",
+				Int:                9,
+				Float32:            1.2,
+				Float64:            123.456,
+				Bool:               true,
+				StringArray:        []string{"sa1", "s with space", "sa3", "", "", ""},
+				IntArray:           []int{1, 2, 3, 5, 8},
+				Float32Array:       []float32{1.2, 3.4, 5.6},
+				Float64Array:       []float64{11.22, 33.44, 55.66},
+				HTTPAllowedOrigins: []string{"a", "b", "c"},
+			},
+		},
 		"CLI overrides environment variables": {
 			config: &struct {
 				F1 string `name:"my-field1"`
