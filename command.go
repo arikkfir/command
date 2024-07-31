@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"reflect"
+	"slices"
 	"strings"
 )
 
@@ -161,6 +162,12 @@ func (c *Command) setParent(parent *Command) error {
 	}
 	for _, hook := range c.preRunHooks {
 		configObjects = append(configObjects, reflect.ValueOf(hook))
+	}
+	for _, hook := range c.postRunHooks {
+		hv := reflect.ValueOf(hook)
+		if !slices.ContainsFunc(configObjects, func(v reflect.Value) bool { return v.Interface() == hv.Interface() }) {
+			configObjects = append(configObjects, hv)
+		}
 	}
 	if fs, err := newFlagSet(parentFlags, configObjects...); err != nil {
 		return fmt.Errorf("failed creating flag-set for command '%s': %w", c.name, err)
