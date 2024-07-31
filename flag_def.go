@@ -2,10 +2,12 @@ package command
 
 import (
 	"cmp"
+	"encoding/csv"
 	"errors"
 	"fmt"
 	"reflect"
 	"strconv"
+	"strings"
 )
 
 type ErrInvalidValue struct {
@@ -104,6 +106,47 @@ func (fd *flagDef) setValue(sv string) error {
 			}
 		case reflect.String:
 			fv.SetString(sv)
+		case reflect.Slice:
+			r := csv.NewReader(strings.NewReader(sv))
+			r.LazyQuotes = true
+			r.TrimLeadingSpace = true
+			rec, err := r.Read()
+			if err != nil {
+				return &ErrInvalidValue{Cause: err, Value: sv, Flag: fd.Name}
+			}
+
+			inValue := reflect.ValueOf(rec)
+
+			targetType := fv.Type().Elem()
+			outSlice := reflect.MakeSlice(reflect.SliceOf(targetType), inValue.Len(), inValue.Len())
+			for i, inElem := range rec {
+				var outElem interface{}
+				var err error
+				switch targetType.Kind() {
+				case reflect.String:
+					outElem = inElem
+				case reflect.Int:
+					outElem, err = strconv.Atoi(inElem)
+				case reflect.Float32:
+					if f64, parseErr := strconv.ParseFloat(inElem, 32); parseErr == nil {
+						outElem = float32(f64)
+					} else {
+						outElem = nil
+						err = parseErr
+					}
+				case reflect.Float64:
+					outElem, err = strconv.ParseFloat(inElem, 64)
+				case reflect.Bool:
+					outElem, err = strconv.ParseBool(inElem)
+				default:
+					return fmt.Errorf("%w: field kind is '%s'", errors.ErrUnsupported, fv.Kind())
+				}
+				if err != nil {
+					return &ErrInvalidValue{Cause: err, Value: inElem, Flag: fd.Name}
+				}
+				outSlice.Index(i).Set(reflect.ValueOf(outElem).Convert(outSlice.Type().Elem()))
+			}
+			fv.Set(outSlice)
 		default:
 			return fmt.Errorf("%w: field kind is '%s'", errors.ErrUnsupported, fv.Kind())
 		}
