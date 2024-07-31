@@ -253,6 +253,17 @@ func (fs *flagSet) readFlagFromField(fieldValue reflect.Value, structField refle
 	case reflect.String:
 		fd.HasValue = true
 		fd.DefaultValue = fieldValue.String()
+	case reflect.Slice:
+		fd.HasValue = true
+		var defaultValues []string
+		for i := 0; i < fieldValue.Len(); i++ {
+			defaultValues = append(defaultValues, fieldValue.Index(i).String())
+		}
+		if defaultValues != nil {
+			fd.DefaultValue = strings.Join(defaultValues, ",")
+		} else {
+			fd.DefaultValue = ""
+		}
 	default:
 		// Unsupported flag field type
 		return fmt.Errorf("unsupported field type: %s", fieldValue.Kind())

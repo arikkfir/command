@@ -609,6 +609,30 @@ func TestNewFlagSet(t *testing.T) {
 	}
 }
 
+func TestFlagSetWithArrays(t *testing.T) {
+	t.Parallel()
+
+	config := &struct {
+		MyArray []string `flag:"true" `
+	}{MyArray: []string{"v1", "v2"}}
+
+	valueOfConfig := reflect.ValueOf(config)
+	fs, err := newFlagSet(nil, valueOfConfig)
+	With(t).Verify(err).Will(BeNil()).OrFail()
+	if len(fs.flags) != 1 {
+		t.Fatalf("Expected 1 flag, got %d", len(fs.flags))
+	}
+
+	f := fs.flags[0]
+	With(t).Verify(f.Name).Will(EqualTo("my-array")).OrFail()
+	With(t).Verify(f.EnvVarName).Will(BeNil()).OrFail()
+	With(t).Verify(f.HasValue).Will(EqualTo(true)).OrFail()
+	With(t).Verify(f.ValueName).Will(BeNil()).OrFail()
+	With(t).Verify(f.Description).Will(BeNil()).OrFail()
+	With(t).Verify(f.Required).Will(BeNil()).OrFail()
+	With(t).Verify(f.DefaultValue).Will(EqualTo("v1,v2")).OrFail()
+}
+
 func TestFlagSetGetMergedFlagDefs(t *testing.T) {
 	t.Parallel()
 	type testCase struct {
@@ -891,6 +915,51 @@ func TestFlagSetApply(t *testing.T) {
 		expectedError        string
 	}
 	testCases := map[string]testCase{
+		"all types are supported from CLI": {
+			config: &struct {
+				String       string    `flag:"true"`
+				Int          int       `flag:"true"`
+				Float32      float32   `flag:"true"`
+				Float64      float64   `flag:"true"`
+				Bool         bool      `flag:"true"`
+				StringArray  []string  `flag:"true"`
+				IntArray     []int     `flag:"true"`
+				Float32Array []float32 `flag:"true"`
+				Float64Array []float64 `flag:"true"`
+			}{},
+			args: []string{
+				"--string", "s1",
+				"--int", "9",
+				"--float32", "1.2",
+				"--float64", "123.456",
+				"--bool",
+				"--string-array", `sa1,"s with space",sa3,,,"`,
+				"--int-array", `1,2,3,5,8`,
+				"--float32array", `1.2,3.4,5.6`,
+				"--float64array", `11.22,33.44,55.66`,
+			},
+			expectedConfig: &struct {
+				String       string    `flag:"true"`
+				Int          int       `flag:"true"`
+				Float32      float32   `flag:"true"`
+				Float64      float64   `flag:"true"`
+				Bool         bool      `flag:"true"`
+				StringArray  []string  `flag:"true"`
+				IntArray     []int     `flag:"true"`
+				Float32Array []float32 `flag:"true"`
+				Float64Array []float64 `flag:"true"`
+			}{
+				String:       "s1",
+				Int:          9,
+				Float32:      1.2,
+				Float64:      123.456,
+				Bool:         true,
+				StringArray:  []string{"sa1", "s with space", "sa3", "", "", ""},
+				IntArray:     []int{1, 2, 3, 5, 8},
+				Float32Array: []float32{1.2, 3.4, 5.6},
+				Float64Array: []float64{11.22, 33.44, 55.66},
+			},
+		},
 		"CLI overrides environment variables": {
 			config: &struct {
 				F1 string `name:"my-field1"`
